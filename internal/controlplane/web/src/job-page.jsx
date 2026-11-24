@@ -101,15 +101,14 @@ function StepOutput({ text }) {
     const node = pane.current;
     following.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
   };
-  return <pre ref={pane} className="step-output" onScroll={scrolled}>{text}</pre>;
+  return <pre ref={pane} className="step-output" onScroll={scrolled}>{text.split("\n").map((line, index) => <span key={index} className="step-output-line" hidden={/\"type\"\s*:\s*\"entry_appended\"/.test(line)}>{line}</span>)}</pre>;
 }
 
 function Step({ step, chosen, now }) {
   const [Icon, tone] = stepIcons[step.state] || stepIcons.unknown;
   const empty = !step.output && !step.error;
-  const [open, setOpen] = useState(step.state === "failed" || step.state === "running");
+  const [open, setOpen] = useState(false);
   const item = useRef(null);
-  useEffect(() => { if (step.state === "failed" || step.state === "running") setOpen(true); }, [step.state]);
   useEffect(() => {
     if (!chosen) return;
     setOpen(true);
