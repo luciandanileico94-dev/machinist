@@ -1098,7 +1098,7 @@ func (s *Store) reply(ctx context.Context, ticketID, by, kind string, comments [
 		if _, err = tx.ExecContext(ctx, `INSERT INTO human_touches(ticket_id,kind,author,at) VALUES(?,?,?,?)`, ticketID, kind, by, stamp(now)); err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `DELETE FROM tracker_reports WHERE ticket_id=? AND kind IN (?,?,?,?,?)`, ticketID, ReportStarted, ReportFailed, ReportMerged, ReportClosed, ReportFinished); err != nil {
+		if _, err = tx.ExecContext(ctx, `DELETE FROM tracker_reports WHERE ticket_id=? AND kind IN (?,?,?,?,?,?)`, ticketID, ReportStarted, ReportFailed, ReportMerged, ReportClosed, ReportFinished, ReportLeftOpen); err != nil {
 			return err
 		}
 		ticket, err = loadTicket(ctx, tx, ticketID)

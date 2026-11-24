@@ -14,6 +14,8 @@ const (
 	ReportClosed  = "closed"
 	// ReportFinished is a job that ended done with no pull request.
 	ReportFinished = "finished"
+	// ReportLeftOpen is a pull request left open for a person to decide.
+	ReportLeftOpen = "left_open"
 )
 
 // TrackerJob is a ticket from a tracker that is still going, or that has
@@ -26,6 +28,9 @@ type TrackerJob struct {
 	// PRState is open, merged or closed, or empty with no pull request.
 	PRState   string
 	SourceKey string
+	// LeftOpen is a pull request that waits for a person: the job reached
+	// pr_ready and Machinist no longer watches it to merge.
+	LeftOpen bool
 	// Reported holds what the tracker has been told already.
 	Reported map[string]bool
 }
@@ -35,7 +40,7 @@ type TrackerJob struct {
 // source yet.
 func (s *Store) TrackerJobs(ctx context.Context, source string) ([]TrackerJob, error) {
 	unreported := `NOT EXISTS (SELECT 1 FROM tracker_reports r WHERE r.ticket_id=t.id AND r.kind=?)`
-	rows, err := s.db.QueryContext(ctx, `SELECT t.id,t.repo,t.state,COALESCE(t.pr_number,0),COALESCE(t.pr_state,''),e.source_key,
+	rows, err := s.db.QueryContext(ctx, `SELECT t.id,t.repo,t.state,COALESCE(t.pr_number,0),COALESCE(t.pr_state,''),e.source_key,(t.state='pr_ready' AND t.shipping IS NULL AND COALESCE(t.pr_state,'')='open'),
   COALESCE((SELECT group_concat(r.kind) FROM tracker_reports r WHERE r.ticket_id=t.id),'')
   FROM tickets t JOIN ticket_entries e ON e.ticket_id=t.id AND e.kind=? AND e.source_key IS NOT NULL
   WHERE t.source=? AND (t.state=?
@@ -43,8 +48,9 @@ func (s *Store) TrackerJobs(ctx context.Context, source string) ([]TrackerJob, e
     OR (t.state=? AND `+unreported+`)
     OR (t.pr_state=? AND `+unreported+`)
     OR (t.pr_state=? AND `+unreported+`)
-    OR (t.state=? AND COALESCE(t.pr_number,0)=0 AND `+unreported+`))
-  ORDER BY t.created_at`, EntryRequest, source, StateWorking, ReportPR, StateFailed, ReportFailed, PRMerged, ReportMerged, PRClosed, ReportClosed, StateDone, ReportFinished)
+    OR (t.state=? AND COALESCE(t.pr_number,0)=0 AND `+unreported+`)
+    OR (t.state=? AND t.shipping IS NULL AND t.pr_state=? AND `+unreported+`))
+  ORDER BY t.created_at`, EntryRequest, source, StateWorking, ReportPR, StateFailed, ReportFailed, PRMerged, ReportMerged, PRClosed, ReportClosed, StateDone, ReportFinished, StatePRReady, PROpen, ReportLeftOpen)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +59,7 @@ func (s *Store) TrackerJobs(ctx context.Context, source string) ([]TrackerJob, e
 	for rows.Next() {
 		var job TrackerJob
 		var reported string
-		if err := rows.Scan(&job.TicketID, &job.Repo, &job.State, &job.PRNumber, &job.PRState, &job.SourceKey, &reported); err != nil {
+		if err := rows.Scan(&job.TicketID, &job.Repo, &job.State, &job.PRNumber, &job.PRState, &job.SourceKey, &job.LeftOpen, &reported); err != nil {
 			return nil, err
 		}
 		job.Reported = map[string]bool{}

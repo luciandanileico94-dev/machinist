@@ -559,6 +559,17 @@ func (p *Poller) syncJob(ctx context.Context, issue string, job tickets.TrackerJ
 			return fmt.Errorf("comment the closed pull request: %w", err)
 		}
 	}
+	if job.LeftOpen {
+		link := fmt.Sprintf("https://github.com/%s/pull/%d", job.Repo, job.PRNumber)
+		result, err := p.Store.LatestMessage(ctx, job.TicketID)
+		if err != nil {
+			return err
+		}
+		comment := "Machinist left the pull request open for a person to decide: " + link + "\n\n" + clip(result, "Its review asked for a person.") + "\n\nMerge or close it, or reply here to tell Machinist what to change."
+		if err := report(tickets.ReportLeftOpen, func() error { return p.Tracker.Return(ctx, issue, comment) }); err != nil {
+			return fmt.Errorf("report the open pull request: %w", err)
+		}
+	}
 	if job.State == tickets.StateDone && job.PRNumber == 0 {
 		result, err := p.Store.LatestMessage(ctx, job.TicketID)
 		if err != nil {
