@@ -91,7 +91,7 @@ func (s *Server) listTickets(w http.ResponseWriter, r *http.Request, _ string) {
 			writeTicketError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, page)
+		s.writeTicketPage(w, page)
 		return
 	}
 
@@ -116,6 +116,13 @@ func (s *Server) listTickets(w http.ResponseWriter, r *http.Request, _ string) {
 	if err != nil {
 		writeTicketError(w, err)
 		return
+	}
+	s.writeTicketPage(w, page)
+}
+
+func (s *Server) writeTicketPage(w http.ResponseWriter, page tickets.TicketPage) {
+	for i := range page.Tickets {
+		s.addFabrikaStatus(&page.Tickets[i])
 	}
 	writeJSON(w, http.StatusOK, page)
 }
@@ -142,6 +149,7 @@ func (s *Server) getTicket(w http.ResponseWriter, r *http.Request, _ string) {
 		writeTicketError(w, err)
 		return
 	}
+	s.addFabrikaStatus(&ticket)
 	detail := map[string]any{"ticket": ticket, "entries": entries, "runs": runs, "figures": figures, "steps": s.presetSteps(ticket.Agent)}
 	if len(runs) > 0 && runs[len(runs)-1].Status == tickets.RunQueued {
 		runners, _, err := s.store.Fleet(r.Context())

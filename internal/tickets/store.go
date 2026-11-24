@@ -136,6 +136,9 @@ type Ticket struct {
 	// request's checks, to merge it or report a failed one. It is empty when
 	// nothing waits. The engine owns its contents.
 	Shipping string `json:"-"`
+	// Fabrika status is filled by the local control plane after loading a ticket.
+	FabrikaStage     string   `json:"fabrika_stage,omitempty"`
+	FabrikaFallbacks []string `json:"fabrika_fallbacks,omitempty"`
 }
 
 // Branch is the one branch every run of this ticket works on.

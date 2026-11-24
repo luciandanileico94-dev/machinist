@@ -65,6 +65,7 @@ test("Board caps Done to 20 cards, keeps Queued and Running uncapped, and jumps 
     source: i % 2 === 0 ? "linear" : "api",
     minutesAgo: i,
   }));
+  Object.assign(running[0], { fabrika_stage: "review", fabrika_fallbacks: ["review-code: Luna → DeepSeek"] });
   const all = [...finished, ...running, ...queued];
   const runningSet = new Set(running.map(ticket => ticket.id));
   const runners = [{ name: "runner-1", jobs: running.map(ticket => ({ ticket_id: ticket.id, step: "work" })) }];
@@ -145,6 +146,8 @@ test("Board caps Done to 20 cards, keeps Queued and Running uncapped, and jumps 
 
   // Board shows all 12 Queued, all 11 Running, and caps Done to 20 cards while showing total 215.
   await eventually(() => assert.equal(document.querySelectorAll('[aria-labelledby="board-done"] .board-card').length, 20));
+  assert.match(document.querySelector("#board-running").parentElement.textContent, /Этап · Ревью/);
+  assert.match(document.querySelector("#board-running").parentElement.textContent, /Резерв · review-code: Luna → DeepSeek/);
   assert.equal(document.querySelectorAll('[aria-labelledby="board-queued"] .board-card').length, 12, "all Queued jobs stay visible");
   assert.equal(document.querySelectorAll('[aria-labelledby="board-running"] .board-card').length, 11, "all Running jobs stay visible");
   assert.equal(document.querySelector('#board-done .board-count').textContent, "215");

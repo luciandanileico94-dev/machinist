@@ -253,3 +253,10 @@ export function prChip(ticket) {
   const state = prStateLabels[ticket.pr_state] ? ticket.pr_state : "";
   return { number: ticket.pr_number, state, label: prState(ticket), href: prLink(ticket) };
 }
+
+
+const fabrikaPhases = { spec: "Spec", build: "Build", review: "Ревью", approver: "Approver" };
+
+export function fabrikaPhase(ticket) {
+  return fabrikaPhases[ticket.fabrika_stage];
+}

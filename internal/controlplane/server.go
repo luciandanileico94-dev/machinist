@@ -206,9 +206,13 @@ func githubPoller(machinistConfig config.Config, loaded *factory.Factory, intake
 		}
 		token = func(context.Context, string) (string, error) { return value, nil }
 	}
-	routes := make(map[string]string, len(github.Repositories))
-	repositories := make([]string, 0, len(github.Repositories))
-	for _, name := range github.Repositories {
+	connected := github.Repositories
+	if len(issues.Repositories) > 0 {
+		connected = issues.Repositories
+	}
+	routes := make(map[string]string, len(connected))
+	repositories := make([]string, 0, len(connected))
+	for _, name := range connected {
 		key := strings.ToLower(name)
 		if _, seen := routes[key]; !seen {
 			repositories = append(repositories, key)

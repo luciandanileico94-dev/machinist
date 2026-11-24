@@ -6,7 +6,7 @@ import { AgentBadges } from "./agent-badge.jsx";
 import { api, SignedOutError } from "./api.js";
 import { State, relativeTime, useNow } from "./display.jsx";
 import {
-  boardColumns, boardDoneLimit, boardOf, filterJobs, formatDuration, jobState, listPageSize,
+  boardColumns, boardDoneLimit, boardOf, fabrikaPhase, filterJobs, formatDuration, jobState, listPageSize,
   newestFirst, orderSources, paginationOf, quickCounts, quickFilters, runningJobs, sourceLabel,
   sourcesOf, ticketsPath,
 } from "./jobs.js";
@@ -24,7 +24,7 @@ function savedView() {
 
 function JobRow({ ticket, running }) {
   return <tr>
-    <td className="job-title"><a href={jobHref(ticket.id)}>{ticket.title || ticket.id}</a></td>
+    <td className="job-title"><a href={jobHref(ticket.id)}>{ticket.title || ticket.id}</a><FabrikaCardStatus ticket={ticket} /></td>
     <td className="job-detail job-source"><Source source={ticket.source} /></td>
     <td className="job-detail">{ticket.repo}</td>
     <td className="job-detail job-preset">{ticket.agent}</td>
@@ -69,10 +69,21 @@ function NowDoing({ job, now }) {
   </div>;
 }
 
+function FabrikaCardStatus({ ticket }) {
+  const phase = fabrikaPhase(ticket);
+  const fallback = ticket.fabrika_fallbacks?.at(-1);
+  if (!phase && !fallback) return null;
+  return <div className="board-card-now">
+    {phase && <span className="board-card-step">Этап · {phase}</span>}
+    {fallback && <span className="board-card-action" title={fallback}>Резерв · {fallback}</span>}
+  </div>;
+}
+
 function JobCard({ ticket, state, showState, progress, now }) {
   return <li className="board-card" data-state={state}>
     <a className="board-card-title" href={jobHref(ticket.id)}>{ticket.title || ticket.id}</a>
     {state === "running" && progress && (progress.step || progress.action) && <NowDoing job={progress} now={now} />}
+    <FabrikaCardStatus ticket={ticket} />
     <div className="board-card-meta">
       <Source source={ticket.source} compact />
       <span>{ticket.repo}</span>

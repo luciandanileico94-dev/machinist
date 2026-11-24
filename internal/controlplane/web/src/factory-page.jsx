@@ -1,50 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { api, SignedOutError } from "./api.js";
-import { Source } from "./source-mark.jsx";
-import { sourceLink } from "./jobs.js";
-import { factorySettingsHref } from "./routes.js";
 
 const labels = { orchestrator: "Оркестратор", publish: "Публикация", spec: "Spec", build: "Build", "review-lead": "Ревью · лид", "review-security": "Ревью · security", "review-ux": "Ревью · UX", "review-ui": "Ревью · UI", "review-code": "Ревью · code", approver: "Approver", merged: "Влито", "needs-human": "Нужен человек" };
-const lanes = [["spec", "Spec"], ["build", "Build"], ["review", "Ревью"], ["approver", "Approver"], ["merged", "Влито"], ["needs-human", "Нужен человек"]];
-const reviewers = ["лид", "security", "UX", "UI", "code"];
 const efforts = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 const providers = { claude: "Claude", codex: "Codex / GPT", deepseek: "DeepSeek" };
-
-function laneOf(job) {
-  const state = String(job.state || "").toLowerCase();
-  const pr = String(job.pr_state || "").toLowerCase();
-  const step = String(job.current_step || "").toLowerCase();
-  if (pr === "merged") return "merged";
-  if (["failed", "cancelled"].includes(state) || (state === "done" && pr !== "merged")) return "needs-human";
-  if (step.includes("approv") || step.includes("publish") || step === "merge") return "approver";
-  if (step.includes("review")) return "review";
-  if (step.includes("spec")) return "spec";
-  if (step.includes("build") || step.includes("orchestrat") || state === "running") return "build";
-  return "spec";
-}
-
-function JobCard({ job, lane }) {
-  return <li className="board-card factory-card" data-state={job.state === "running" ? "running" : lane === "needs-human" ? "needs_you" : lane === "merged" ? "done" : "queued"}>
-    <strong className="factory-card-title">{job.title || job.key || job.id}</strong>
-    <div className="board-card-meta"><code>{job.key || job.id}</code><span>{[job.current_step || job.state, job.preset].filter(Boolean).join(" · ")}</span></div>
-    {lane === "review" && <div className="factory-reviews">{reviewers.map(name => <span className="pill" key={name}>{name} · Machinist</span>)}</div>}
-    {sourceLink(job) && <a className="factory-link" href={sourceLink(job)} target="_blank" rel="noreferrer"><Source source={job.source} /> · Источник ↗</a>}
-    {job.pr_number && job.vars?.repo && <a className="factory-link" href={`https://github.com/${job.vars.repo}/pull/${job.pr_number}`} target="_blank" rel="noreferrer">PR #{job.pr_number} · {job.pr_state || ""}</a>}
-  </li>;
-}
-
-function Board({ jobs }) {
-  return <div className="board factory-board">
-    {lanes.map(([key, title]) => {
-      const items = jobs.filter(job => laneOf(job) === key);
-      return <section className="board-column" key={key} aria-label={title}>
-        <h2 className="board-column-head"><span className="board-column-name"><span className="board-dot" data-column={key === "merged" ? "done" : key === "build" ? "running" : "queued"} aria-hidden="true" />{title}</span><span className="board-count">{items.length}</span></h2>
-        {items.length ? <ul className="board-cards">{items.map(job => <JobCard key={job.id} job={job} lane={key} />)}</ul> : <p className="board-empty">Пока пусто</p>}
-      </section>;
-    })}
-  </div>;
-}
 
 function Settings({ config, setConfig, onSave, saving, message }) {
   function updateStage(id, field, value) {
@@ -80,32 +40,18 @@ function Settings({ config, setConfig, onSave, saving, message }) {
   </>;
 }
 
-export function FactoryPage({ tab = "board", onSignedOut }) {
-  const [jobs, setJobs] = useState([]);
+export function FactoryPage({ onSignedOut }) {
   const [config, setConfig] = useState(null);
-  const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let stopped = false;
-    let timer;
-    async function load() {
-      try {
-        const response = await api("/machinist/jobs");
-        if (!stopped) { setJobs(response.jobs || []); setError(""); }
-      } catch (failure) {
-        if (failure instanceof SignedOutError) onSignedOut();
-        else if (!stopped) setError(failure.message);
-      }
-      if (!stopped) timer = window.setTimeout(load, 10_000);
-    }
-    load();
     api("/api/v1/fabrika/settings").then(value => { if (!stopped) setConfig(value); }).catch(failure => {
       if (failure instanceof SignedOutError) onSignedOut();
       else if (!stopped) setMessage(`Настройки недоступны: ${failure.message}`);
     });
-    return () => { stopped = true; window.clearTimeout(timer); };
+    return () => { stopped = true; };
   }, [onSignedOut]);
 
   async function save() {
@@ -120,14 +66,7 @@ export function FactoryPage({ tab = "board", onSignedOut }) {
   }
 
   return <div className="page factory-page">
-    <header className="page-head"><div><h1>Фабрика</h1><p className="page-sub">Доска этапов и настройки агентов.</p></div></header>
-    <div className="factory-tabs" role="group" aria-label="Разделы фабрики">
-      <Button type="button" variant={tab === "board" ? "default" : "outline"} aria-pressed={tab === "board"} onClick={() => { window.location.hash = "#/factory"; }}>Доска</Button>
-      <Button type="button" variant={tab === "settings" ? "default" : "outline"} aria-pressed={tab === "settings"} onClick={() => { window.location.hash = factorySettingsHref; }}>Настройки</Button>
-      {tab === "board" && <span className="ticket-meta" role="status">Обновление каждые 10 секунд</span>}
-    </div>
-    {error && tab === "board" && <p className="form-error" role="alert">Machinist API: {error}</p>}
-    {tab === "board" && <Board jobs={jobs} />}
-    {tab === "settings" && (config ? <Settings config={config} setConfig={setConfig} onSave={save} saving={saving} message={message} /> : <p className="page-note" role="status">{message || "Загружаю настройки…"}</p>)}
+    <header className="page-head"><div><h1>Фабрика</h1><p className="page-sub">Настройки агентов.</p></div></header>
+    {config ? <Settings config={config} setConfig={setConfig} onSave={save} saving={saving} message={message} /> : <p className="page-note" role="status">{message || "Загружаю настройки…"}</p>}
   </div>;
 }
