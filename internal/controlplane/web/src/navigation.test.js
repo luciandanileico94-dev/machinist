@@ -22,6 +22,15 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
   ].map((event, index) => ({ sequence: index + 1, time: now, ...event }));
   let releaseOld, releaseRun, holdRun = false;
   let reruns = 0;
+  let factorySaves = 0;
+  const factorySettings = {
+    router: { strategy: "weighted-round-robin", subscriptions: { claude2: { weight: 1 } } },
+    stages: { build: { provider: "claude", model: "claude-opus-5-5", effort: "high" } },
+  };
+  const factoryJobs = { jobs: [
+    { id: "f_1", key: "ENG-1", title: "Review the change", state: "running", current_step: "review-ui", preset: "default", source: "linear", source_url: "https://linear.app/team/ENG-1", vars: { repo: "owner/repo" } },
+    { id: "f_2", key: "ENG-2", title: "Merged change", state: "done", current_step: "", pr_state: "merged", preset: "default", vars: { repo: "owner/repo" }, pr_number: 22 },
+  ] };
   const started = [];
   const reply = (status, body) => ({ ok: status < 400, status, json: async () => body });
   globalThis.fetch = async (url, options = {}) => {
@@ -33,6 +42,13 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
     }
     if (!signedIn) return reply(401, { error: "a token is required" });
     if (url === "/api/v1/repositories") return reply(200, { repositories: ["owner/repo"], name: "alice" });
+    if (url === "/machinist/jobs") return reply(200, factoryJobs);
+    if (url === "/api/v1/fabrika/settings" && options.method === "PUT") {
+      factorySaves++;
+      Object.assign(factorySettings, JSON.parse(options.body));
+      return reply(200, factorySettings);
+    }
+    if (url === "/api/v1/fabrika/settings") return reply(200, factorySettings);
     if (url === "/api/v1/tickets" || url.startsWith("/api/v1/tickets?")) {
       const list = [older, ticket];
       return reply(200, { tickets: list, total: list.length, limit: 50, offset: 0, has_more: false, done_total: list.length, done_limit: 20 });
@@ -85,7 +101,7 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
   // Jobs open as a board, and the List button shows the same jobs as rows.
   await eventually(() => assert.ok(document.querySelector(".board-card")));
   assert.equal(document.querySelector("h1").textContent, "Jobs");
-  assert.deepEqual([...document.querySelectorAll("nav a")].map(link => link.textContent), ["Dashboard", "Jobs", "Runners", "Settings"]);
+  assert.deepEqual([...document.querySelectorAll("nav a")].map(link => link.textContent), ["Dashboard", "Jobs", "Runners", "Settings", "Фабрика"]);
   assert.deepEqual([...document.querySelectorAll(".board-column-head")].map(head => head.textContent), ["Queued0", "Running0", "Done2"]);
   await act(async () => [...document.querySelectorAll(".range button")].find(button => button.textContent === "List").click());
   await eventually(() => assert.ok(document.querySelector("table.jobs tbody tr")));
@@ -174,6 +190,18 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
   await eventually(() => assert.equal(document.querySelector("h1").textContent, "Center the toasts"));
   await act(async () => { releaseOld(); await new Promise(resolve => setTimeout(resolve, 50)); });
   assert.equal(document.querySelector("h1").textContent, "Center the toasts");
+
+  await act(async () => { window.location.hash = "#/factory"; });
+  await eventually(() => assert.equal(document.querySelector("h1").textContent, "Фабрика"));
+  await eventually(() => assert.equal(document.querySelectorAll(".factory-card").length, 2));
+  assert.equal(document.querySelector('[aria-label="Ревью"] .factory-card-title').textContent, "Review the change");
+  assert.equal(document.querySelector('[aria-label="Влито"] .factory-card-title').textContent, "Merged change");
+  await act(async () => [...document.querySelectorAll(".factory-tabs button")].find(button => button.textContent === "Настройки").click());
+  await eventually(() => assert.ok(document.querySelector('[aria-label="Build — модель"]')));
+  assert.equal(document.querySelector('[aria-label="Вес claude2"]').value, "1");
+  await act(async () => [...document.querySelectorAll(".page-actions button")].find(button => button.textContent === "Сохранить настройки").click());
+  await eventually(() => assert.equal(document.querySelector('[role="status"]').textContent, "Сохранено в etapy.yaml и роутер."));
+  assert.equal(factorySaves, 1);
 
   signedIn = false;
   await eventually(() => assert.ok(document.querySelector("#token")), 300);

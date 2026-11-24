@@ -399,6 +399,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/agents", s.requireToken(s.listAgents))
 	mux.HandleFunc("GET /api/v1/settings/github", s.requireToken(s.githubSettings))
 	mux.HandleFunc("GET /api/v1/settings/linear", s.requireToken(s.linearSettings))
+	mux.HandleFunc("GET /api/v1/fabrika/settings", s.requireToken(s.fabrikaSettings))
+	mux.HandleFunc("PUT /api/v1/fabrika/settings", s.requireToken(s.fabrikaSettings))
 	mux.HandleFunc("GET /api/v1/tokens", s.requireToken(s.listTokens))
 	mux.HandleFunc("POST /api/v1/tokens", s.requireToken(s.createToken))
 	mux.HandleFunc("POST /api/v1/tokens/{name}/regenerate", s.requireToken(s.regenerateToken))

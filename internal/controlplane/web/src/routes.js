@@ -1,6 +1,6 @@
 import { settingsPages } from "./settings.js";
 
-const pages = new Set(["dashboard", "jobs", "new", "runners"]);
+const pages = new Set(["dashboard", "jobs", "new", "runners", "factory"]);
 const settingsPageNames = new Set(settingsPages.map(([page]) => page));
 
 // #/dashboard shows the numbers and is where the app opens, #/jobs lists jobs, #/jobs/<id> opens one, #/new starts

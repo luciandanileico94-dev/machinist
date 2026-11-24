@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource-variable/inter";
-import { ChartColumn, LogOut, Rows3, Server, Settings2 } from "lucide-react";
+import { ChartColumn, Factory, LogOut, Rows3, Server, Settings2 } from "lucide-react";
 import { Brand } from "@/components/ui/brand";
 import { cn } from "@/lib/utils";
 import { redirectFor, routeFromHash, settingsHref } from "@/routes";
 import { createStatusLoader } from "@/status-loader";
 import { api, SignedOutError } from "./api.js";
 import { DashboardPage } from "./dashboard-page.jsx";
+import { FactoryPage } from "./factory-page.jsx";
 import { JobPage } from "./job-page.jsx";
 import { JobsPage } from "./jobs-page.jsx";
 import { NewJobPage } from "./new-job-page.jsx";
@@ -19,7 +20,7 @@ import "./styles.css";
 
 const pollMillis = 2000;
 const emptyStatus = { runners: [], queue: null };
-const navigation = [["dashboard", ChartColumn, "Dashboard"], ["jobs", Rows3, "Jobs"], ["runners", Server, "Runners"], ["settings", Settings2, "Settings"]];
+const navigation = [["dashboard", ChartColumn, "Dashboard"], ["jobs", Rows3, "Jobs"], ["runners", Server, "Runners"], ["settings", Settings2, "Settings"], ["factory", Factory, "Фабрика"]];
 
 // followRedirect moves an old address, such as #/setup, to where it lives now,
 // in place, so Back does not return to it. It returns the hash to show.
@@ -125,6 +126,7 @@ function App() {
       {route.view === "dashboard" && <DashboardPage onSignedOut={signedOut} />}
       {route.view === "settings" && <SettingsPage page={route.page} setup={setup} onSignedOut={signedOut} onSetupChange={setSetup} />}
       {route.view === "runners" && <RunnersPage runners={status.runners} queue={status.queue} loaded={loaded} error={error} onChange={() => loader.current.refresh()} onSignedOut={signedOut} />}
+      {route.view === "factory" && <FactoryPage onSignedOut={signedOut} />}
     </main>
   </div>;
 }
