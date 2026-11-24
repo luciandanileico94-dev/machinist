@@ -213,12 +213,33 @@ a.source:hover span { text-decoration: underline; }
 .factory-link { color: var(--info); font-size: 12px; }
 .factory-section { display: flex; flex-direction: column; gap: 12px; }
 .factory-section .chart-title, .factory-section .page-note { margin: 0; }
-.factory-weights { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.factory-subscriptions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.factory-subscription { display: flex; min-width: 0; flex-direction: column; gap: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 12px; }
+.factory-subscription header, .factory-limit-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.factory-subscription .pill { flex: none; }
+.factory-limit { display: flex; flex-direction: column; gap: 4px; }
+.factory-limit-head { font-size: 12px; }
+.factory-limit small { color: var(--faint); font-size: 11px; }
+.factory-progress { height: 7px; overflow: hidden; border-radius: 999px; background: var(--muted); }
+.factory-progress span { display: block; height: 100%; border-radius: inherit; background: var(--success); }
+.factory-progress[data-tone="warning"] span { background: var(--warning); }
+.factory-progress[data-tone="danger"] span { background: var(--danger); }
+.factory-rule-stop { display: grid; max-width: 280px; grid-template-columns: 1fr 76px auto; align-items: center; gap: 8px; color: var(--muted-foreground); }
+.factory-rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.factory-rule { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 12px; }
+.factory-rule-enabled { display: flex; grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 8px; font-weight: 600; }
+.factory-rule-enabled input { width: auto; }
+.factory-rule .ticket-meta { grid-column: 1 / -1; }
 .factory-field { display: flex; min-width: 0; flex-direction: column; gap: 5px; color: var(--muted-foreground); font-size: 12px; }
 .factory-field .field-control { min-width: 0; }
 .factory-stages { display: flex; flex-direction: column; }
 .factory-stage { display: grid; grid-template-columns: minmax(130px, 1.2fr) 1fr 1.3fr .7fr; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); padding: 10px 0; }
 .factory-stage:last-child { border-bottom: 0; }
+.factory-fallbacks { display: flex; grid-column: 1 / -1; flex-direction: column; gap: 8px; }
+.factory-fallbacks h3 { margin: 0; color: var(--muted-foreground); font-size: 12px; font-weight: 500; }
+.factory-fallback { display: grid; grid-template-columns: 1fr 1.3fr .7fr auto; align-items: end; gap: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+.factory-fallback-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.factory-fallback-actions button { min-height: 34px; padding: 0 8px; }
 .factory-stage-name { font-size: 14px; font-weight: 500; }
 .factory-stage-name small { display: block; color: var(--faint); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 400; }
 .board-column { display: flex; min-width: 0; flex-direction: column; gap: 10px; border-radius: 12px; background: color-mix(in srgb, var(--muted) 70%, var(--background)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 60%, transparent); padding: 12px; }
@@ -253,6 +274,13 @@ a.source:hover span { text-decoration: underline; }
 @media (max-width: 1100px) { .factory-board { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .board { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 700px) {
+  .factory-subscriptions { grid-template-columns: 1fr; }
+  .factory-rules { grid-template-columns: 1fr; }
+  .factory-rule { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .factory-stage { grid-template-columns: 1fr 1fr; }
+  .factory-stage-name { grid-column: 1 / -1; }
+  .factory-fallback { grid-template-columns: 1fr 1fr; }
+  .factory-fallback-actions { grid-column: 1 / -1; }
   .factory-weights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .factory-stage { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 8px; }
   .factory-stage-name { grid-column: 1 / -1; }

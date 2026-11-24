@@ -25,7 +25,10 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
   let factorySaves = 0;
   const factorySettings = {
     router: { strategy: "weighted-round-robin", subscriptions: { claude2: { weight: 1 } } },
-    stages: { build: { provider: "claude", model: "claude-opus-5-5", effort: "high" } },
+    stages: { build: { provider: "claude", model: "claude-opus-5-5", effort: "high", fallback: ["claude/claude-sonnet-5-5:medium"] } },
+    catalog: { claude: ["claude-opus-5-5", "claude-sonnet-5-5"], codex: ["gpt-6.2-sol", "gpt-6-luna"], deepseek: ["deepseek-v4.1-flash-max"], efforts: { claude: { "claude-opus-5-5": ["low", "medium", "high"], "claude-sonnet-5-5": ["low", "medium", "high"] }, codex: { "gpt-6.2-sol": ["low", "medium", "high", "xhigh"], "gpt-6-luna": ["low", "medium", "high", "xhigh", "max"] }, deepseek: { "deepseek-v4.1-flash-max": ["low", "medium", "high"] } } },
+    rules: { primaryStop: 0.9, subscriptions: { tretya: { label: "Третья", enabled: true, order: 1, weeklyMax: 0.8, topUpHours: 5, topUpTo: 1, max5h: 0.95 }, chetvertaya: { label: "Четвёртая", enabled: true, order: 2, weeklyMax: 0.7, topUpHours: 17, topUpTo: 1, max5h: 0.95, temporary: true, note: "Временно" }, vtoraya: { label: "Вторая", enabled: true, order: 3, weeklyMax: 0.85, topUpHours: 24, topUpTo: 1, max5h: 0.95 }, osnovnaya: { label: "Основная", enabled: true, order: 4, weeklyMax: 0.9, topUpHours: 0, topUpTo: 0.9, max5h: 0.95 } } },
+    subscriptionStatus: ["Codex", "Основная", "Вторая", "Третья", "Четвёртая"].map((name, index) => ({ id: String(index), name, status: "good", statusLabel: "Годна", "5hUtilization": 0.2, "5hReset": 1795557000, "7dUtilization": 0.4, "7dReset": 1796025600, "5hThreshold": 0.95, "7dThreshold": 0.8, requests: index + 2 })),
   };
   const factoryJobs = { jobs: [
     { id: "f_1", key: "ENG-1", title: "Review the change", state: "running", current_step: "review-ui", preset: "default", source: "linear", source_url: "https://linear.app/team/ENG-1", vars: { repo: "owner/repo" } },
@@ -198,9 +201,23 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
   assert.equal(document.querySelector('[aria-label="Влито"] .factory-card-title').textContent, "Merged change");
   await act(async () => [...document.querySelectorAll(".factory-tabs button")].find(button => button.textContent === "Настройки").click());
   await eventually(() => assert.ok(document.querySelector('[aria-label="Build — модель"]')));
-  assert.equal(document.querySelector('[aria-label="Вес claude2"]').value, "1");
+  assert.equal(document.querySelectorAll(".factory-subscription").length, 5);
+  assert.equal(document.querySelectorAll('[role="progressbar"]').length, 10);
+  assert.match(document.querySelectorAll(".factory-subscription")[0].textContent, /Запросы фабрики: 2/);
+  assert.equal(document.querySelectorAll('[aria-label^="Build: резерв"]').length, 3);
+  await act(async () => [...document.querySelectorAll(".factory-fallbacks button")].find(button => button.textContent === "Добавить резерв").click());
+  assert.equal(document.querySelectorAll(".factory-fallback").length, 2);
+  await act(async () => document.querySelector('[aria-label="Удалить резерв 2: Build"]').click());
+  assert.equal(document.querySelectorAll(".factory-fallback").length, 1);
+  await act(async () => [...document.querySelectorAll(".factory-fallbacks button")].find(button => button.textContent === "Добавить резерв").click());
+  assert.deepEqual([...document.querySelectorAll(".factory-fallback select[aria-label$=модель]")].map(select => select.value), ["claude-sonnet-5-5", "claude-opus-5-5"]);
+  await act(async () => document.querySelector('[aria-label="Поднять резерв 2: Build"]').click());
+  assert.deepEqual([...document.querySelectorAll(".factory-fallback select[aria-label$=модель]")].map(select => select.value), ["claude-opus-5-5", "claude-sonnet-5-5"]);
+  await act(async () => document.querySelector('[aria-label="Опустить резерв 1: Build"]').click());
+  assert.deepEqual([...document.querySelectorAll(".factory-fallback select[aria-label$=модель]")].map(select => select.value), ["claude-sonnet-5-5", "claude-opus-5-5"]);
+  assert.equal(document.querySelector('[aria-label="Стоп основной, неделя"]').value, "90");
   await act(async () => [...document.querySelectorAll(".page-actions button")].find(button => button.textContent === "Сохранить настройки").click());
-  await eventually(() => assert.equal(document.querySelector('[role="status"]').textContent, "Сохранено в etapy.yaml и роутер."));
+  await eventually(() => assert.equal(document.querySelector('[role="status"]').textContent, "Сохранено в etapy.yaml и правилах роутера."));
   assert.equal(factorySaves, 1);
 
   signedIn = false;
