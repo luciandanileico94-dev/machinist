@@ -61,10 +61,20 @@ function Board({ jobs }) {
 
 function Settings({ config, setConfig, onSave, saving, message }) {
   function updateStage(id, field, value) {
-    setConfig(current => ({ ...current, stages: { ...current.stages, [id]: { ...current.stages[id], [field]: value } } }));
+    setConfig(current => {
+      const stage = { ...current.stages[id], [field]: value };
+      if (field === "model" && !effortsFor(current.catalog, stage.provider, value).includes(stage.effort)) stage.effort = effortsFor(current.catalog, stage.provider, value)[0];
+      return { ...current, stages: { ...current.stages, [id]: stage } };
+    });
   }
   function updateProvider(id, provider) {
-    setConfig(current => ({ ...current, stages: { ...current.stages, [id]: { ...current.stages[id], provider, model: current.catalog[provider][0] } } }));
+    setConfig(current => {
+      const model = current.catalog[provider][0];
+      const available = effortsFor(current.catalog, provider, model);
+      const stage = { ...current.stages[id], provider, model };
+      if (!available.includes(stage.effort)) stage.effort = available[0];
+      return { ...current, stages: { ...current.stages, [id]: stage } };
+    });
   }
   function updateFallback(id, index, field, value) {
     const items = (config.stages[id].fallback || []).map(parseFallback).filter(Boolean);
