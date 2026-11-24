@@ -219,9 +219,23 @@ func githubPoller(machinistConfig config.Config, loaded *factory.Factory, intake
 			routes[key] = name
 		}
 	}
+	overrides := make(map[string]string, len(issues.RepositoryPresets))
+	for repository, name := range issues.RepositoryPresets {
+		key := strings.ToLower(repository)
+		if _, ok := routes[key]; !ok {
+			return nil, fmt.Errorf("github.issues.repository_presets: %q is not watched", repository)
+		}
+		if _, ok := overrides[key]; ok {
+			return nil, fmt.Errorf("github.issues.repository_presets: duplicate repository %q", repository)
+		}
+		if _, ok := loaded.Preset(name); !ok {
+			return nil, fmt.Errorf("github.issues.repository_presets: preset %q for %s is not in the factory", name, repository)
+		}
+		overrides[key] = name
+	}
 	return &sources.Poller{
 		Tracker:        &sources.GitHubIssues{Repositories: repositories, Label: issues.Label, Token: token},
-		Rules:          sources.TrackerRules{AllowedUsers: issues.AllowedUsers, Preset: preset, Teams: routes},
+		Rules:          sources.TrackerRules{AllowedUsers: issues.AllowedUsers, Preset: preset, Teams: routes, RepositoryPresets: overrides},
 		Intake:         intake,
 		Store:          store,
 		Interval:       issues.Poll,

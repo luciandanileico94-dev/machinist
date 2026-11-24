@@ -51,3 +51,28 @@ func TestGitHubIntakeCanExcludeAConnectedProject(t *testing.T) {
 		t.Fatalf("label = %s, repositories = %v", source.Label, source.Repositories)
 	}
 }
+
+func TestGitHubIntakeUsesRepositoryPreset(t *testing.T) {
+	config := testConfig()
+	config.GitHub.Repositories = []string{"owner/toy", "owner/nymo"}
+	config.GitHub.Issues.Label = "fabrika"
+	config.GitHub.Issues.AllowedUsers = []string{"lucian"}
+	config.GitHub.Issues.RepositoryPresets = map[string]string{"OWNER/Nymo": "nymo"}
+	loaded := testFactory()
+	loaded.Presets["nymo"] = loaded.Presets["default"]
+	poller, err := githubPoller(config, loaded, nil, nil, io.Discard, func(context.Context, string) (string, error) {
+		return "fixture", nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if poller.Rules.RepositoryPresets["owner/nymo"] != "nymo" || poller.Rules.Preset != "default" {
+		t.Fatalf("unexpected presets: %+v", poller.Rules)
+	}
+	config.GitHub.Issues.Repositories = []string{"owner/toy"}
+	if _, err := githubPoller(config, loaded, nil, nil, io.Discard, func(context.Context, string) (string, error) {
+		return "fixture", nil
+	}); err == nil {
+		t.Fatal("override for an unwatched repository was accepted")
+	}
+}

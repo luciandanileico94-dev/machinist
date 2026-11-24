@@ -104,6 +104,8 @@ type TrackerRules struct {
 	// AllowedUsers may send work. An assignment by anyone else is ignored.
 	AllowedUsers []string
 	Preset       string
+	// RepositoryPresets overrides Preset for the repository a job is routed to.
+	RepositoryPresets map[string]string
 	// Projects maps a project name or ID to a repository. A project's mapping
 	// wins over its team's.
 	Projects map[string]string
@@ -147,7 +149,11 @@ func (rules TrackerRules) Decide(assignment Assignment) (start, string) {
 	if !slices.Contains(rules.AllowedUsers, assignment.Actor) {
 		return start{}, fmt.Sprintf("user %q may not start jobs", assignment.Actor)
 	}
-	return start{key: assignment.Key, link: assignment.URL, preset: rules.Preset, repo: repository, prompt: trackerPrompt(assignment)}, ""
+	preset := rules.Preset
+	if override := rules.RepositoryPresets[strings.ToLower(repository)]; override != "" {
+		preset = override
+	}
+	return start{key: assignment.Key, link: assignment.URL, preset: preset, repo: repository, prompt: trackerPrompt(assignment)}, ""
 }
 
 func trackerPrompt(assignment Assignment) string {

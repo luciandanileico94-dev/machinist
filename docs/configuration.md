@@ -73,7 +73,9 @@ github:
 
 Set `github.issues.label` to poll for GitHub issues. By default this watches
 all repositories in `github.repositories`. Use `github.issues.repositories`
-to restrict polling to a subset while leaving the others connected in Projects. Example:
+to restrict polling to a subset while leaving the others connected in Projects.
+Use `github.issues.repository_presets` to select a preset for a watched repository.
+Other watched repositories continue to use `github.issues.preset`. Example:
 
 ```yaml
 github:

@@ -186,3 +186,17 @@ func TestGitHubAssignmentsDoNotAdvancePastUnreadRepository(t *testing.T) {
 		t.Fatalf("assignments = %v, error = %v", got, err)
 	}
 }
+
+func TestTrackerDecideUsesRepositoryPreset(t *testing.T) {
+	rules := TrackerRules{
+		AllowedUsers: []string{"maintainer"}, Preset: "fabrika",
+		Teams:             map[string]string{"owner/toy": "owner/toy", "owner/nymo": "Owner/Nymo"},
+		RepositoryPresets: map[string]string{"owner/nymo": "nymo"},
+	}
+	for team, expected := range map[string]string{"owner/toy": "fabrika", "owner/nymo": "nymo"} {
+		job, reason := rules.Decide(Assignment{Team: team, Actor: "maintainer"})
+		if reason != "" || job.preset != expected {
+			t.Fatalf("%s: preset = %s, reason = %s", team, job.preset, reason)
+		}
+	}
+}
