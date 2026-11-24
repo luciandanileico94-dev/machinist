@@ -147,7 +147,7 @@ function Settings({ config, setConfig, onSave, saving, message }) {
           </div>
         </div>;
       })}</div>
-      <p className="page-note">Настройки сохраняются в etapy.yaml и применяются при следующем запуске этапа.</p>
+      <p className="page-note">Модели и цепочки сохраняются в etapy.yaml; правила выбора сразу применяются к новым сессиям и весам роутера.</p>
     </section>
     <div className="page-actions"><Button type="button" disabled={saving} onClick={onSave}>{saving ? "Сохраняю…" : "Сохранить настройки"}</Button><span className="ticket-meta" role="status">{message}</span></div>
   </>;
