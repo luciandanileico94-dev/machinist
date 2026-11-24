@@ -18,7 +18,7 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
   const run = { id: "run_1", ticket_id: "t_new", kind: "agent", runner: "runner-1", status: "failed", started_at: now, ended_at: now, stages: [{ name: "checkout", state: "succeeded", duration_millis: 5088 }, { name: "test", state: "failed", duration_millis: 900, error: "command exited with status 1" }, { name: "publish", state: "skipped" }] };
   const events = [
     { type: "step.started", message: "name=checkout" }, { type: "process.output", encoding: "base64", data: btoa("Cloning into 'repo'\n") },
-    { type: "step.started", message: "name=test" }, { type: "process.output", encoding: "base64", data: btoa("FAIL tests/styles.test.ts\n") },
+    { type: "step.started", message: "name=test" }, { type: "process.output", encoding: "base64", data: btoa('FAIL tests/styles.test.ts\n{"type":"entry_appended","entry":{}}\n') },
   ].map((event, index) => ({ sequence: index + 1, time: now, ...event }));
   let releaseOld, releaseRun, holdRun = false;
   let reruns = 0;
@@ -112,9 +112,12 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
   assert.match(document.querySelector(".job-facts").textContent, /Этап фабрикиРевью/);
   assert.match(document.querySelector('[aria-labelledby="fabrika-fallbacks"]').textContent, /review-code: Luna → DeepSeek/);
   assert.ok(document.querySelector('a[href="https://github.com/owner/repo/pull/44"]'));
-  await eventually(() => assert.match(document.querySelector(".step-output")?.textContent || "", /FAIL tests\/styles.test.ts/));
+  assert.equal(document.querySelectorAll(".step-output").length, 0, "step logs start collapsed");
   assert.deepEqual([...document.querySelectorAll(".step-name")].map(name => name.textContent), ["checkout", "test", "publish"]);
-  assert.equal(document.querySelectorAll(".step-output").length, 1, "only the failed step opens by itself");
+  await act(async () => document.querySelector('.step[data-state="failed"] .step-row').click());
+  await eventually(() => assert.match(document.querySelector(".step-output")?.textContent || "", /FAIL tests\/styles.test.ts/));
+  assert.equal(document.querySelectorAll(".step-output").length, 1, "opening a step shows only its log");
+  assert.equal(document.querySelector('.step-output-line[hidden]')?.textContent, '{"type":"entry_appended","entry":{}}');
   await act(async () => document.querySelector('.step[data-state="succeeded"] .step-row').click());
   await eventually(() => assert.ok([...document.querySelectorAll(".step-output")].some(pane => /Cloning into/.test(pane.textContent))));
   assert.equal(document.querySelector('.step[data-state="skipped"] .step-row').disabled, true);
