@@ -17,20 +17,10 @@ factory/
 Keep what an agent is told in `agents/`, shell in `scripts/`, and presets to a short list
 of steps that call them.
 
-## Upgrading shipped factory files
+## Custom factory
 
-`machinist init` records the SHA-256 hash of each shipped file in `factory/manifest.yaml`.
-When a newer Machinist binary ships updated factory files, the control plane warns at
-startup and on the Settings page which files are out of date.
-
-Run `machinist factory upgrade` from the configuration directory to apply them:
-
-- Unedited files that match an older shipped hash are updated in place.
-- Missing shipped files are created.
-- Files your team has edited are never overwritten; Machinist prints a diff against the
-  shipped version instead. Pass `--force` to overwrite edited files with the shipped copies.
-
-Commit the updated files and `factory/manifest.yaml`, then restart the control plane.
+This fork loads the factory you supply. Automatic template upgrades are disabled.
+Commit changes to your factory and restart the control plane to load them.
 
 ## Presets
 

@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	machinistexamples "github.com/owainlewis/machinist/examples"
 	"github.com/owainlewis/machinist/internal/factory"
 	"github.com/owainlewis/machinist/internal/fakegh"
 )
@@ -34,7 +33,7 @@ func TestInitWritesFactoryManifestAndFactoryIsCurrent(t *testing.T) {
 	}
 }
 
-func TestStartWarnsAboutOutdatedFactoryFilesAndNamesUpgradeCommand(t *testing.T) {
+func TestStartLoadsCustomFactoryWithoutTemplateWarnings(t *testing.T) {
 	fakegh.Install(t, "machinist-bot")
 	directory := inTempDirectory(t)
 	if exitCode := Execute(t.Context(), []string{"init"}, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, "test"); exitCode != 0 {
@@ -84,125 +83,29 @@ func TestStartWarnsAboutOutdatedFactoryFilesAndNamesUpgradeCommand(t *testing.T)
 		t.Fatalf("stale start exit = %d, stderr = %q", exitCode, staleStderr.body.String())
 	}
 	output := staleStderr.body.String()
-	for _, want := range []string{
-		"machinist: warning:",
-		"agents/publish.md (edited)",
-		"scripts/publish.sh",
-		"scripts/revise.sh (missing)",
-		"machinist factory upgrade",
-	} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("start stderr missing %q:\n%s", want, output)
-		}
+	if strings.Contains(output, "out of date") || strings.Contains(output, "factory upgrade") {
+		t.Fatalf("custom factory produced a template warning: %q", output)
 	}
 }
 
-func TestFactoryUpgradeCLIHandlesUneditedEditedMissingAndForce(t *testing.T) {
+func TestCustomFactoryUpgradeRefusesEvenWithForce(t *testing.T) {
 	directory := inTempDirectory(t)
 	if exitCode := Execute(t.Context(), []string{"init"}, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, "test"); exitCode != 0 {
-		t.Fatalf("init exit code = %d", exitCode)
+		t.Fatalf("init exit = %d", exitCode)
 	}
-
-	factoryDir := filepath.Join(directory, "factory")
-	manifest, _, err := factory.LoadManifest(factoryDir)
-	if err != nil {
+	file := filepath.Join(directory, "factory", "agents", "publish.md")
+	custom := []byte("---\nharness: pi\n---\nTeam custom publishing.\n")
+	if err := os.WriteFile(file, custom, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	// 1. Unedited older shipped file.
-	oldScript := []byte("#!/bin/sh\necho old publish\n")
-	if err := os.WriteFile(filepath.Join(factoryDir, "scripts", "publish.sh"), oldScript, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	manifest.Files["scripts/publish.sh"] = factory.HashBytes(oldScript)
-
-	// 2. Edited file based on an older shipped version.
-	editedPublish := "---\nharness: claude\n---\nTeam custom publish prompt.\n"
-	if err := os.WriteFile(filepath.Join(factoryDir, "agents", "publish.md"), []byte(editedPublish), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	manifest.Files["agents/publish.md"] = factory.HashBytes([]byte("---\nharness: claude\n---\nOlder shipped publish.\n"))
-
-	// 3. Customized file based on the current shipped version (must stay untouched even with --force).
-	customizedReview := "---\nharness: codex\n---\nTeam custom review prompt.\n"
-	if err := os.WriteFile(filepath.Join(factoryDir, "agents", "review.md"), []byte(customizedReview), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	// 4. Missing shipped file.
-	if err := os.Remove(filepath.Join(factoryDir, "scripts", "revise.sh")); err != nil {
-		t.Fatal(err)
-	}
-	if err := factory.WriteManifest(factoryDir, manifest); err != nil {
-		t.Fatal(err)
-	}
-
-	// Run upgrade without --force.
-	var stdout, stderr bytes.Buffer
-	if exitCode := Execute(t.Context(), []string{"factory", "upgrade"}, strings.NewReader(""), &stdout, &stderr, "test"); exitCode != 0 {
-		t.Fatalf("upgrade exit = %d, stderr = %q", exitCode, stderr.String())
-	}
-	out := stdout.String()
-	for _, want := range []string{
-		"updated scripts/publish.sh",
-		"created scripts/revise.sh",
-		"skipped agents/publish.md",
-		"--- agents/publish.md (installed)",
-		"+++ agents/publish.md (shipped)",
-		"-Team custom publish prompt.",
-		"--force",
-	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("upgrade output missing %q:\n%s", want, out)
+	for _, args := range [][]string{{"factory", "upgrade"}, {"factory", "upgrade", "--force"}} {
+		var stderr bytes.Buffer
+		if exitCode := Execute(t.Context(), args, strings.NewReader(""), &bytes.Buffer{}, &stderr, "test"); exitCode == 0 ||
+			!strings.Contains(stderr.String(), "своя фабрика — upgrade выключен") {
+			t.Fatalf("args = %v, exit = %d, stderr = %q", args, exitCode, stderr.String())
 		}
-	}
-	if strings.Contains(out, "agents/review.md") {
-		t.Fatalf("upgrade should not touch customized current file:\n%s", out)
-	}
-
-	// Verify unedited and missing files match shipped, and edited file was NOT overwritten.
-	wantPublishScript, _ := machinistexamples.Files.ReadFile("factory/scripts/publish.sh")
-	wantReviseScript, _ := machinistexamples.Files.ReadFile("factory/scripts/revise.sh")
-	wantPublishAgent, _ := machinistexamples.Files.ReadFile("factory/agents/publish.md")
-
-	if got, _ := os.ReadFile(filepath.Join(factoryDir, "scripts", "publish.sh")); !bytes.Equal(got, wantPublishScript) {
-		t.Fatalf("scripts/publish.sh was not updated")
-	}
-	if info, err := os.Stat(filepath.Join(factoryDir, "scripts", "publish.sh")); err != nil || info.Mode().Perm() != 0o700 {
-		t.Fatalf("scripts/publish.sh mode = %v, err = %v", info, err)
-	}
-	if got, _ := os.ReadFile(filepath.Join(factoryDir, "scripts", "revise.sh")); !bytes.Equal(got, wantReviseScript) {
-		t.Fatalf("scripts/revise.sh was not created")
-	}
-	if info, err := os.Stat(filepath.Join(factoryDir, "scripts", "revise.sh")); err != nil || info.Mode().Perm() != 0o700 {
-		t.Fatalf("scripts/revise.sh mode = %v, err = %v", info, err)
-	}
-	if got, _ := os.ReadFile(filepath.Join(factoryDir, "agents", "publish.md")); string(got) != editedPublish {
-		t.Fatalf("agents/publish.md was overwritten without --force: %q", got)
-	}
-
-	// Run upgrade with --force.
-	stdout.Reset()
-	stderr.Reset()
-	if exitCode := Execute(t.Context(), []string{"factory", "upgrade", "--force"}, strings.NewReader(""), &stdout, &stderr, "test"); exitCode != 0 {
-		t.Fatalf("forced upgrade exit = %d, stderr = %q", exitCode, stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "updated agents/publish.md") {
-		t.Fatalf("forced upgrade output = %q", stdout.String())
-	}
-	if got, _ := os.ReadFile(filepath.Join(factoryDir, "agents", "publish.md")); !bytes.Equal(got, wantPublishAgent) {
-		t.Fatalf("agents/publish.md was not overwritten with --force")
-	}
-	if got, _ := os.ReadFile(filepath.Join(factoryDir, "agents", "review.md")); string(got) != customizedReview {
-		t.Fatalf("customized agents/review.md was overwritten by --force: %q", got)
-	}
-
-	// Third run reports up to date.
-	stdout.Reset()
-	stderr.Reset()
-	if exitCode := Execute(t.Context(), []string{"factory", "upgrade"}, strings.NewReader(""), &stdout, &stderr, "test"); exitCode != 0 {
-		t.Fatalf("third upgrade exit = %d, stderr = %q", exitCode, stderr.String())
-	}
-	if strings.TrimSpace(stdout.String()) != "factory is up to date" {
-		t.Fatalf("third upgrade output = %q", stdout.String())
+		if actual, err := os.ReadFile(file); err != nil || !bytes.Equal(actual, custom) {
+			t.Fatalf("custom agent changed: %q, err = %v", actual, err)
+		}
 	}
 }

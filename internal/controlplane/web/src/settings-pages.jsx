@@ -8,7 +8,8 @@ import { AgentBadge, AgentBadges } from "./agent-badge.jsx";
 import { agentSummary, harnessLabel } from "./agents.js";
 import { relativeTime } from "./display.jsx";
 import { HarnessMark } from "./harness-mark.jsx";
-import { agentFrontMatter, agentOverridden, dayLabel, durationShort, factoryUpdateLine, githubLine, groupAgents, pollLabel, roleLabel, stepKind, stepKindLabel, stepShellPreview, tokenLine, tokenPrefixLabel, validateTokenName } from "./settings.js";
+import { agentFrontMatter, agentOverridden, dayLabel, durationShort, githubLine, groupAgents, pollLabel, roleLabel, stepKind, stepKindLabel, stepShellPreview, tokenLine, tokenPrefixLabel, validateTokenName } from "./settings.js";
+import { factorySettingsHref } from "./routes.js";
 import { sentence } from "./setup-page.jsx";
 
 // useResource loads what a page shows from one or more API routes.
@@ -495,7 +496,7 @@ function AgentGroupRow({ group, fileAgentsByName }) {
   const { primary, variants, presets, uses, harnesses, prompt } = group;
   const multi = variants.length > 1;
   const usageLabel = !presets.length
-    ? "No preset"
+    ? primary.model?.startsWith("fabrika/") ? "Фабрика → Настройки" : "No preset"
     : presets.length <= 3
       ? presets.join(", ")
       : `${presets.length} presets`;
@@ -579,7 +580,6 @@ export function PresetsPage({ onSignedOut }) {
   const [presets, agents] = data || [];
   const [showPresetSpecific, setShowPresetSpecific] = useState(false);
   const [showUnused, setShowUnused] = useState(false);
-  const updates = presets?.updates || [];
   const agentsByName = new Map((agents?.agents || []).map(agent => [agent.name, agent]));
   const grouped = groupAgents(agents?.agents || []);
   const presetSpecificCount = grouped.presetGroups.reduce((sum, entry) => sum + entry.groups.length, 0);
@@ -588,16 +588,6 @@ export function PresetsPage({ onSignedOut }) {
   return <>
     <Head title="Presets and agents" sub={data && `${presets.presets.length} ${presets.presets.length === 1 ? "preset" : "presets"} and ${agents.agents.length} ${agents.agents.length === 1 ? "agent" : "agents"}.`} />
     <p className="page-note">These come from <code>factory/presets</code> and <code>factory/agents</code>. Click any step or agent to inspect its script, front matter, or prompt. Change them in git and restart the control plane.</p>
-    {updates.length > 0 && <div className="page-warning factory-warning" role="status">
-      <p><strong>{factoryUpdateLine(updates)}</strong> Run <code>machinist factory upgrade</code> and restart the control plane.</p>
-      <ul className="factory-warning-files">
-        {updates.map(file => <li key={file.path}>
-          <code>{file.path}</code>
-          {file.status === "edited" && " (edited locally)"}
-          {file.status === "missing" && " (missing)"}
-        </li>)}
-      </ul>
-    </div>}
     <Status data={data} error={error} label="Loading presets" />
     {data && <>
       <section className="settings-section" aria-labelledby="presets-title">
@@ -606,6 +596,7 @@ export function PresetsPage({ onSignedOut }) {
       </section>
       <section className="settings-section" aria-labelledby="agents-title">
         <h2 id="agents-title" className="chart-title">Agents</h2>
+        <p className="page-note">Модель и effort ролей Fabrika задаёт <code>etapy.yaml</code>. <a href={factorySettingsHref}>Фабрика → Настройки</a></p>
         {agents.agents.length
           ? <>
             {grouped.primary.length > 0 && <div className="agent-section-group">

@@ -7,6 +7,7 @@ const settingsPageNames = new Set(settingsPages.map(([page]) => page));
 // one, #/runners lists runners and #/settings/<page> shows one page of settings.
 export function routeFromHash(hash) {
   const value = hash.replace(/^#\//, "");
+  if (value === "factory/settings") return { view: "factory", jobID: "", tab: "settings" };
   if (value.startsWith("jobs/") && value.slice(5)) {
     try {
       return { view: "job", jobID: decodeURIComponent(value.slice(5)) };
@@ -39,3 +40,5 @@ export function jobHref(id) {
 export function settingsHref(page) {
   return `#/settings/${page}`;
 }
+
+export const factorySettingsHref = "#/factory/settings";

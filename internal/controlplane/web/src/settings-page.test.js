@@ -40,7 +40,7 @@ test("Settings: a new install opens on the overview, each page has a route, and 
         required: false,
         warning: true,
         detail: `${factoryUpdates.length} factory files are out of date: ${factoryUpdates.map(file => file.path).join(", ")}.`,
-        fix: "Run machinist factory upgrade and restart the control plane.",
+        fix: "Review custom factory settings.",
       }] : []),
     ],
     projects,
@@ -349,28 +349,8 @@ test("Settings: a new install opens on the overview, each page has a route, and 
   assert.equal(document.querySelector(".settings-body form, .settings-body input, .settings-body textarea"), null, "nothing here edits the factory");
   assert.equal(document.querySelector(".factory-warning"), null, "no factory warning when up to date");
 
-  // Outdated factory files warn on Settings overview and on Presets and agents.
-  factoryUpdates = [
-    { path: "agents/publish.md", status: "edited" },
-    { path: "scripts/publish.sh", status: "outdated" },
-    { path: "scripts/revise.sh", status: "missing" },
-  ];
-  await go("#/settings/overview");
-  await eventually(() => assert.equal(heading(), "Overview"));
-  await eventually(() => assert.match(document.querySelector(".setup-checks")?.textContent || "", /Out of dateFactory/));
-  assert.match(document.querySelector(".setup-checks").textContent, /machinist factory upgrade/);
-  assert.ok(document.querySelector('a[aria-label="Open Presets and agents"][href="#/settings/presets"]'));
-  assert.ok(document.querySelector('[aria-label="Factory files are out of date"]'));
-  await go("#/settings/presets");
-  await eventually(() => assert.equal(heading(), "Presets and agents"));
-  await eventually(() => assert.ok(document.querySelector(".factory-warning")));
-  const warningText = document.querySelector(".factory-warning").textContent;
-  assert.match(warningText, /3 factory files are out of date/);
-  assert.match(warningText, /machinist factory upgrade/);
-  assert.match(warningText, /agents\/publish\.md \(edited locally\)/);
-  assert.match(warningText, /scripts\/publish\.sh/);
-  assert.match(warningText, /scripts\/revise\.sh \(missing\)/);
-  factoryUpdates = [];
+  assert.ok(document.querySelector('a[href="#/factory/settings"]'));
+  assert.doesNotMatch(document.querySelector(".settings-body").textContent, /factory upgrade/);
 
   // Tokens: revoked tokens are hidden by default, prefixes and "No prefix" show on rows, and tokens can be created, regenerated and revoked.
   await go("#/settings/tokens");

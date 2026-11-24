@@ -275,7 +275,7 @@ func TestLoadManifestRejectsInvalidAndSymlinks(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ManifestName), []byte("unknown_key: 1\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Load(dir); err == nil || !strings.Contains(err.Error(), "manifest") {
+	if _, _, err := LoadManifest(dir); err == nil || !strings.Contains(err.Error(), "manifest") {
 		t.Fatalf("expected manifest error, got %v", err)
 	}
 
@@ -289,24 +289,5 @@ func TestLoadManifestRejectsInvalidAndSymlinks(t *testing.T) {
 	}
 	if _, _, err := LoadManifest(symDir); err == nil || !strings.Contains(err.Error(), "not a regular file") {
 		t.Fatalf("expected symlink error, got %v", err)
-	}
-}
-
-func TestWarningLine(t *testing.T) {
-	if got := WarningLine(nil); got != "" {
-		t.Fatalf("got = %q", got)
-	}
-	one := WarningLine([]FileUpdate{{Path: "scripts/publish.sh", Status: FileOutdated}})
-	if one != "factory file is out of date (scripts/publish.sh); run machinist factory upgrade" {
-		t.Fatalf("one = %q", one)
-	}
-	many := WarningLine([]FileUpdate{
-		{Path: "agents/publish.md", Status: FileEdited},
-		{Path: "scripts/publish.sh", Status: FileOutdated},
-		{Path: "scripts/revise.sh", Status: FileMissing},
-	})
-	want := "factory files are out of date (agents/publish.md (edited), scripts/publish.sh, scripts/revise.sh (missing)); run machinist factory upgrade"
-	if many != want {
-		t.Fatalf("many = %q, want %q", many, want)
 	}
 }

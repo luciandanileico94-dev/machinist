@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/owainlewis/machinist/internal/factory"
 	"github.com/owainlewis/machinist/internal/githubapp"
 	"github.com/owainlewis/machinist/internal/tickets"
 )
@@ -60,11 +59,10 @@ type ProjectView struct {
 
 // Setup is the setup page: the checklist and the projects.
 type Setup struct {
-	Ready          bool                 `json:"ready"`
-	Checks         []SetupCheck         `json:"checks"`
-	Projects       []ProjectView        `json:"projects"`
-	InstallURL     string               `json:"install_url,omitempty"`
-	FactoryUpdates []factory.FileUpdate `json:"factory_updates,omitempty"`
+	Ready      bool          `json:"ready"`
+	Checks     []SetupCheck  `json:"checks"`
+	Projects   []ProjectView `json:"projects"`
+	InstallURL string        `json:"install_url,omitempty"`
 }
 
 func (s *Server) setup(ctx context.Context) (Setup, error) {
@@ -145,11 +143,6 @@ func (s *Server) setup(ctx context.Context) (Setup, error) {
 		linear.Link = docs + "linear.md#set-it-up"
 	}
 	setup.Checks = append(setup.Checks, linear)
-
-	if check, ok := s.factoryCheck(); ok {
-		setup.Checks = append(setup.Checks, check)
-		setup.FactoryUpdates = append([]factory.FileUpdate(nil), s.factory.Updates...)
-	}
 
 	setup.Ready = !slices.ContainsFunc(setup.Checks, func(check SetupCheck) bool { return check.Required && !check.OK })
 	return setup, nil
@@ -264,34 +257,4 @@ func (s *Server) harnessCheck(runners []tickets.Runner) (SetupCheck, bool) {
 		check.Link = docs + "runners.md"
 	}
 	return check, true
-}
-
-// factoryCheck reports shipped factory files that are out of date, edited
-// against an older shipped version, or missing.
-func (s *Server) factoryCheck() (SetupCheck, bool) {
-	if s.factory == nil || len(s.factory.Updates) == 0 {
-		return SetupCheck{}, false
-	}
-	names := make([]string, len(s.factory.Updates))
-	for i, update := range s.factory.Updates {
-		switch update.Status {
-		case factory.FileEdited:
-			names[i] = update.Path + " (edited)"
-		case factory.FileMissing:
-			names[i] = update.Path + " (missing)"
-		default:
-			names[i] = update.Path
-		}
-	}
-	noun := fmt.Sprintf("%d factory files are", len(names))
-	if len(names) == 1 {
-		noun = "1 factory file is"
-	}
-	return SetupCheck{
-		Name:    "Factory",
-		OK:      false,
-		Warning: true,
-		Detail:  fmt.Sprintf("%s out of date: %s.", noun, strings.Join(names, ", ")),
-		Fix:     "Run machinist factory upgrade and restart the control plane.",
-	}, true
 }

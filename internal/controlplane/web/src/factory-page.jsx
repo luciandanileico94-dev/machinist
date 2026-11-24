@@ -3,12 +3,13 @@ import { Button } from "@/components/ui/button";
 import { api, SignedOutError } from "./api.js";
 import { Source } from "./source-mark.jsx";
 import { sourceLink } from "./jobs.js";
+import { factorySettingsHref } from "./routes.js";
 
-const stages = ["spec", "build", "review-lead", "review-security", "review-ux", "review-ui", "review-code", "approver"];
-const labels = { spec: "Spec", build: "Build", "review-lead": "Ревью · лид", "review-security": "Ревью · security", "review-ux": "Ревью · UX", "review-ui": "Ревью · UI", "review-code": "Ревью · code", approver: "Approver", merged: "Влито", "needs-human": "Нужен человек" };
+const labels = { orchestrator: "Оркестратор", publish: "Публикация", spec: "Spec", build: "Build", "review-lead": "Ревью · лид", "review-security": "Ревью · security", "review-ux": "Ревью · UX", "review-ui": "Ревью · UI", "review-code": "Ревью · code", approver: "Approver", merged: "Влито", "needs-human": "Нужен человек" };
 const lanes = [["spec", "Spec"], ["build", "Build"], ["review", "Ревью"], ["approver", "Approver"], ["merged", "Влито"], ["needs-human", "Нужен человек"]];
 const reviewers = ["лид", "security", "UX", "UI", "code"];
-const efforts = ["low", "medium", "high", "xhigh", "max"];
+const efforts = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+const providers = { claude: "Claude", codex: "Codex / GPT", deepseek: "DeepSeek" };
 
 function laneOf(job) {
   const state = String(job.state || "").toLowerCase();
@@ -50,8 +51,7 @@ function Settings({ config, setConfig, onSave, saving, message }) {
     setConfig(current => ({ ...current, stages: { ...current.stages, [id]: { ...current.stages[id], [field]: value } } }));
   }
   function updateProvider(id, provider) {
-    updateStage(id, "provider", provider);
-    updateStage(id, "model", provider === "claude" ? "claude-opus-5-5" : "gpt-6.2-sol");
+    setConfig(current => ({ ...current, stages: { ...current.stages, [id]: { ...current.stages[id], provider, model: current.catalog[provider][0] } } }));
   }
   return <>
     <section className="panel factory-section" aria-labelledby="weights-heading">
@@ -63,14 +63,15 @@ function Settings({ config, setConfig, onSave, saving, message }) {
     </section>
     <section className="panel factory-section" aria-labelledby="stages-heading">
       <h2 id="stages-heading" className="chart-title">Модель и effort этапов</h2>
-      <div className="factory-stages">{stages.filter(id => config.stages[id]).map(id => {
-        const stage = config.stages[id];
-        const available = stage.provider === "claude" ? ["claude-opus-5-5", "claude-sonnet-5-5"] : ["gpt-6.2-sol"];
+      <div className="factory-stages">{Object.entries(config.stages).map(([id, stage]) => {
+        const label = labels[id] || id;
+        const available = config.catalog?.[stage.provider] || [];
         return <div className="factory-stage" key={id}>
-          <div className="factory-stage-name">{labels[id]}<small>{id}</small></div>
-          <label className="factory-field"><span>Провайдер</span><select className="field-control" aria-label={`${labels[id]} — провайдер`} value={stage.provider} onChange={event => updateProvider(id, event.target.value)}><option value="claude">Claude</option><option value="codex">Codex / GPT</option></select></label>
-          <label className="factory-field"><span>Модель</span><select className="field-control" aria-label={`${labels[id]} — модель`} value={stage.model} onChange={event => updateStage(id, "model", event.target.value)}>{[...new Set([stage.model, ...available])].map(model => <option key={model}>{model}</option>)}</select></label>
-          <label className="factory-field"><span>Effort</span><select className="field-control" aria-label={`${labels[id]} — effort`} value={stage.effort} onChange={event => updateStage(id, "effort", event.target.value)}>{efforts.map(effort => <option key={effort}>{effort}</option>)}</select></label>
+          <div className="factory-stage-name">{label}<small>{id}</small></div>
+          <label className="factory-field"><span>Провайдер</span><select className="field-control" aria-label={`${label} — провайдер`} value={stage.provider} onChange={event => updateProvider(id, event.target.value)}>{Object.entries(providers).filter(([key]) => key === stage.provider || config.catalog?.[key]?.length).map(([key, title]) => <option key={key} value={key}>{title}</option>)}</select></label>
+          <label className="factory-field"><span>Модель</span><select className="field-control" aria-label={`${label} — модель`} value={stage.model} onChange={event => updateStage(id, "model", event.target.value)}>{[...new Set([stage.model, ...available])].map(model => <option key={model}>{model}</option>)}</select></label>
+          <label className="factory-field"><span>Effort</span><select className="field-control" aria-label={`${label} — effort`} value={stage.effort} onChange={event => updateStage(id, "effort", event.target.value)}>{efforts.map(effort => <option key={effort}>{effort}</option>)}</select></label>
+          {stage.fallback?.length > 0 && <p className="ticket-meta">Резерв {stage.fallback.join(" → ")}</p>}
         </div>;
       })}</div>
       <p className="page-note">Настройки сохраняются в etapy.yaml и применяются при следующем запуске этапа.</p>
@@ -79,8 +80,7 @@ function Settings({ config, setConfig, onSave, saving, message }) {
   </>;
 }
 
-export function FactoryPage({ onSignedOut }) {
-  const [tab, setTab] = useState("board");
+export function FactoryPage({ tab = "board", onSignedOut }) {
   const [jobs, setJobs] = useState([]);
   const [config, setConfig] = useState(null);
   const [error, setError] = useState("");
@@ -122,8 +122,8 @@ export function FactoryPage({ onSignedOut }) {
   return <div className="page factory-page">
     <header className="page-head"><div><h1>Фабрика</h1><p className="page-sub">Доска этапов и настройки агентов.</p></div></header>
     <div className="factory-tabs" role="group" aria-label="Разделы фабрики">
-      <Button type="button" variant={tab === "board" ? "default" : "outline"} aria-pressed={tab === "board"} onClick={() => setTab("board")}>Доска</Button>
-      <Button type="button" variant={tab === "settings" ? "default" : "outline"} aria-pressed={tab === "settings"} onClick={() => setTab("settings")}>Настройки</Button>
+      <Button type="button" variant={tab === "board" ? "default" : "outline"} aria-pressed={tab === "board"} onClick={() => { window.location.hash = "#/factory"; }}>Доска</Button>
+      <Button type="button" variant={tab === "settings" ? "default" : "outline"} aria-pressed={tab === "settings"} onClick={() => { window.location.hash = factorySettingsHref; }}>Настройки</Button>
       {tab === "board" && <span className="ticket-meta" role="status">Обновление каждые 10 секунд</span>}
     </div>
     {error && tab === "board" && <p className="form-error" role="alert">Machinist API: {error}</p>}

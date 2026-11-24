@@ -21,7 +21,7 @@ import (
 // recording the SHA-256 of each shipped file as last installed or upgraded.
 const ManifestName = "manifest.yaml"
 
-const manifestHeader = "# Written by machinist init and machinist factory upgrade.\n" +
+const manifestHeader = "# Written by machinist init.\n" +
 	"# Hashes of shipped factory files as last installed, used to tell edited files from out-of-date ones.\n"
 
 // FileStatus describes how one installed factory file compares to the binary's
@@ -339,30 +339,6 @@ func UpgradeAgainst(directory string, shipped fs.FS, force bool) (UpgradeResult,
 		result.ManifestUpdated = true
 	}
 	return result, nil
-}
-
-// WarningLine formats a single-line warning naming every out-of-date file and
-// the command to upgrade them. It returns "" when updates is empty.
-func WarningLine(updates []FileUpdate) string {
-	if len(updates) == 0 {
-		return ""
-	}
-	names := make([]string, len(updates))
-	for i, update := range updates {
-		switch update.Status {
-		case FileEdited:
-			names[i] = update.Path + " (edited)"
-		case FileMissing:
-			names[i] = update.Path + " (missing)"
-		default:
-			names[i] = update.Path
-		}
-	}
-	noun := "factory files are"
-	if len(updates) == 1 {
-		noun = "factory file is"
-	}
-	return fmt.Sprintf("%s out of date (%s); run machinist factory upgrade", noun, strings.Join(names, ", "))
 }
 
 func classifyFile(directory, rel string, shippedBody []byte, manifestHash string) (FileStatus, []byte, error) {

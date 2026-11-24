@@ -126,7 +126,7 @@ function App() {
       {route.view === "dashboard" && <DashboardPage onSignedOut={signedOut} />}
       {route.view === "settings" && <SettingsPage page={route.page} setup={setup} onSignedOut={signedOut} onSetupChange={setSetup} />}
       {route.view === "runners" && <RunnersPage runners={status.runners} queue={status.queue} loaded={loaded} error={error} onChange={() => loader.current.refresh()} onSignedOut={signedOut} />}
-      {route.view === "factory" && <FactoryPage onSignedOut={signedOut} />}
+      {route.view === "factory" && <FactoryPage tab={route.tab} onSignedOut={signedOut} />}
     </main>
   </div>;
 }

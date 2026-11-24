@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { jobHref, redirectFor, routeFromHash, settingsHref } from "./routes.js";
+import { factorySettingsHref, jobHref, redirectFor, routeFromHash, settingsHref } from "./routes.js";
 
 test("the dashboard, jobs, the new job form, runners and factory are addressable", () => {
   for (const view of ["dashboard", "jobs", "new", "runners", "factory"]) assert.deepEqual(routeFromHash(`#/${view}`), { view, jobID: "" });
@@ -38,4 +38,9 @@ test("a job has its own route", () => {
 
 test("a malformed job route opens the list", () => {
   assert.deepEqual(routeFromHash("#/jobs/%E0%A4%A"), { view: "jobs", jobID: "" });
+});
+
+test("the canonical stage settings link opens the Factory settings tab", () => {
+  assert.deepEqual(routeFromHash(factorySettingsHref), { view: "factory", jobID: "", tab: "settings" });
+  assert.equal(redirectFor(factorySettingsHref), "");
 });
