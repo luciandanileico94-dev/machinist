@@ -48,7 +48,8 @@ type GitHub struct {
 	Repositories []string `yaml:"repositories"`
 	// App, when set, gives each run a short-lived token for its repository
 	// alone, in place of a token on the runner.
-	App *GitHubApp `yaml:"app"`
+	App    *GitHubApp   `yaml:"app"`
+	Issues GitHubIssues `yaml:"issues"`
 	// AutoMerge lets the publish step merge a pull request once its checks
 	// pass and its review is clean. It is on unless set to false.
 	AutoMerge *bool `yaml:"auto_merge"`
@@ -62,6 +63,56 @@ func (g GitHub) AutoMerges() bool { return g.AutoMerge == nil || *g.AutoMerge }
 type GitHubApp struct {
 	ID             int64  `yaml:"id"`
 	PrivateKeyFile string `yaml:"private_key_file"`
+}
+
+// GitHubIssues starts jobs from issues with Label in github.repositories.
+type GitHubIssues struct {
+	Label          string        `yaml:"label"`
+	AllowedUsers   []string      `yaml:"allowed_users"`
+	Preset         string        `yaml:"preset"`
+	PollInterval   string        `yaml:"poll_interval"`
+	Poll           time.Duration `yaml:"-"`
+	MaxJobsPerHour int           `yaml:"max_jobs_per_hour"`
+}
+
+func (g GitHubIssues) Enabled() bool { return g.Label != "" }
+
+func (g *GitHubIssues) applyDefaults(repositories []string) error {
+	g.Label = strings.TrimSpace(g.Label)
+	if !g.Enabled() {
+		if len(g.AllowedUsers) > 0 || g.Preset != "" || g.PollInterval != "" || g.MaxJobsPerHour != 0 {
+			return errors.New("github.issues: label is required")
+		}
+		return nil
+	}
+	if len(repositories) == 0 {
+		return errors.New("github.issues: list repositories in github.repositories")
+	}
+	var allowed []string
+	for _, user := range g.AllowedUsers {
+		if user = strings.ToLower(strings.TrimSpace(user)); user != "" {
+			allowed = append(allowed, user)
+		}
+	}
+	if len(allowed) == 0 {
+		return errors.New("github.issues: list the GitHub logins allowed to start jobs in allowed_users")
+	}
+	g.AllowedUsers = allowed
+	g.Poll = time.Minute
+	if g.PollInterval != "" {
+		poll, err := time.ParseDuration(g.PollInterval)
+		if err != nil || poll < 10*time.Second {
+			return errors.New("github.issues: poll_interval must be a duration of at least 10s, such as 60s")
+		}
+		g.Poll = poll
+	}
+	if g.MaxJobsPerHour < 0 {
+		return errors.New("github.issues: max_jobs_per_hour must be positive")
+	}
+	if g.MaxJobsPerHour == 0 {
+		g.MaxJobsPerHour = 20
+	}
+	return nil
 }
 
 // Linear starts jobs from issues assigned to the Machinist app, by asking
@@ -180,6 +231,9 @@ func LoadConfig(path string) (Config, error) {
 		return Config{}, err
 	}
 	if err := applyAppDefaults(machinistConfig.GitHub.App, machinistConfig.Server.configDir); err != nil {
+		return Config{}, err
+	}
+	if err := machinistConfig.GitHub.Issues.applyDefaults(machinistConfig.GitHub.Repositories); err != nil {
 		return Config{}, err
 	}
 	machinistConfig.Linear, err = applyLinearDefaults(machinistConfig.Linear, os.Getenv)

@@ -38,9 +38,9 @@ type TrackerJob struct {
 // TrackerJobs lists a source's tickets that are working, or whose pull
 // request, its merge or close, or a failure has not been reported to the
 // source yet.
-func (s *Store) TrackerJobs(ctx context.Context, source string) ([]TrackerJob, error) {
+func (s *Store) TrackerJobs(ctx context.Context, source string, reportLeftOpen bool) ([]TrackerJob, error) {
 	unreported := `NOT EXISTS (SELECT 1 FROM tracker_reports r WHERE r.ticket_id=t.id AND r.kind=?)`
-	rows, err := s.db.QueryContext(ctx, `SELECT t.id,t.repo,t.state,COALESCE(t.pr_number,0),COALESCE(t.pr_state,''),e.source_key,(t.state='pr_ready' AND t.shipping IS NULL AND COALESCE(t.pr_state,'')='open'),
+	rows, err := s.db.QueryContext(ctx, `SELECT t.id,t.repo,t.state,COALESCE(t.pr_number,0),COALESCE(t.pr_state,''),e.source_key,(? AND t.state='pr_ready' AND t.shipping IS NULL AND COALESCE(t.pr_state,'')='open'),
   COALESCE((SELECT group_concat(r.kind) FROM tracker_reports r WHERE r.ticket_id=t.id),'')
   FROM tickets t JOIN ticket_entries e ON e.ticket_id=t.id AND e.kind=? AND e.source_key IS NOT NULL
   WHERE t.source=? AND (t.state=?
@@ -49,8 +49,8 @@ func (s *Store) TrackerJobs(ctx context.Context, source string) ([]TrackerJob, e
     OR (t.pr_state=? AND `+unreported+`)
     OR (t.pr_state=? AND `+unreported+`)
     OR (t.state=? AND COALESCE(t.pr_number,0)=0 AND `+unreported+`)
-    OR (t.state=? AND t.shipping IS NULL AND t.pr_state=? AND `+unreported+`))
-  ORDER BY t.created_at`, EntryRequest, source, StateWorking, ReportPR, StateFailed, ReportFailed, PRMerged, ReportMerged, PRClosed, ReportClosed, StateDone, ReportFinished, StatePRReady, PROpen, ReportLeftOpen)
+    OR (? AND t.state=? AND t.shipping IS NULL AND t.pr_state=? AND `+unreported+`))
+  ORDER BY t.created_at`, reportLeftOpen, EntryRequest, source, StateWorking, ReportPR, StateFailed, ReportFailed, PRMerged, ReportMerged, PRClosed, ReportClosed, StateDone, ReportFinished, reportLeftOpen, StatePRReady, PROpen, ReportLeftOpen)
 	if err != nil {
 		return nil, err
 	}

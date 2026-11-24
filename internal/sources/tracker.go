@@ -172,6 +172,8 @@ type Poller struct {
 	Interval time.Duration
 	// MaxJobsPerHour caps the jobs the tracker can start in any hour.
 	MaxJobsPerHour int
+	// ReportLeftOpen returns pull requests that need a human decision to the tracker.
+	ReportLeftOpen bool
 	Log            io.Writer
 	now            func() time.Time
 	sleep          func(context.Context, time.Duration) bool
@@ -498,7 +500,7 @@ const maxReason = 500
 // A job whose issue has left In Progress or Machinist is cancelled.
 func (p *Poller) sync(ctx context.Context) error {
 	name := p.Tracker.Name()
-	jobs, err := p.Store.TrackerJobs(ctx, name)
+	jobs, err := p.Store.TrackerJobs(ctx, name, p.ReportLeftOpen)
 	if err != nil {
 		return err
 	}
@@ -559,7 +561,7 @@ func (p *Poller) syncJob(ctx context.Context, issue string, job tickets.TrackerJ
 			return fmt.Errorf("comment the closed pull request: %w", err)
 		}
 	}
-	if job.LeftOpen {
+	if job.LeftOpen && !job.Reported[tickets.ReportLeftOpen] {
 		link := fmt.Sprintf("https://github.com/%s/pull/%d", job.Repo, job.PRNumber)
 		result, err := p.Store.LatestMessage(ctx, job.TicketID)
 		if err != nil {

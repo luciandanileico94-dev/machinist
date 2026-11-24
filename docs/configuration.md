@@ -66,7 +66,36 @@ github:
 | `github.auto_merge` | Whether jobs merge their own pull requests once the checks pass and the review accepted the change. On unless set to `false`; when off, every pull request stays open for a person. Steps see it as `MACHINIST_AUTO_MERGE` |
 | `github.app.id` | The [GitHub App](github-app.md)'s App ID. Set it to give each run a short-lived token |
 | `github.app.private_key_file` | The app's private key file. Keep it out of git |
+| `github.issues.*` | Start jobs from labeled [GitHub issues](#github-issues) |
 | `linear.*` | Start jobs from Linear issues. Off unless `linear.projects` or `linear.teams` is set. See [Linear](linear.md) |
+
+### GitHub Issues
+
+Set `github.issues.label` to poll the repositories listed in
+`github.repositories`. Example:
+
+```yaml
+github:
+  handle: machinist-bot
+  repositories: [owner/repo]
+  issues:
+    label: fabrika
+    allowed_users: [maintainer]
+    preset: default
+    poll_interval: 60s
+    max_jobs_per_hour: 20
+```
+
+Only GitHub logins in `allowed_users` can start jobs by adding the label or
+rerun them by replying. The preset defaults to `server.default_preset`.
+The minimum interval is 10 seconds. The default interval and hourly cap are
+shown above. The control plane needs GitHub Issues read and write access
+through `GH_TOKEN` or `github.app`. Start it before labeling new issues.
+
+Add the label to pass an open issue to Machinist. It reports progress on the
+issue using `<label>:working`, `<label>:needs-human`, `<label>:failed` and
+`<label>:merged`. A merge closes the issue. A pull request left open for a
+person leaves the issue open.
 
 ## Runner: runner.yaml
 

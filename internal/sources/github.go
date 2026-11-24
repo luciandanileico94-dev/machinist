@@ -20,8 +20,7 @@ const GitHubAPI = "https://api.github.com"
 
 const (
 	githubPage = 100
-	// maxGitHubPages bounds one read. Assignments left over are read on the
-	// next poll; replies are read whole or not at all.
+	// maxGitHubPages bounds a read. Partial results cannot advance the cursor.
 	maxGitHubPages  = 10
 	maxGitHubAnswer = 8 << 20
 )
@@ -109,10 +108,16 @@ func splitIssue(issue string) (string, int, error) {
 // Assignments returns open issues with the label, updated after since,
 // oldest first. The actor is whoever added the label last.
 func (g *GitHubIssues) Assignments(ctx context.Context, since time.Time) ([]Assignment, error) {
-	var found []Assignment
+	type updatedIssue struct {
+		repository string
+		issue      githubIssue
+	}
+	var pending []updatedIssue
+	var cutoff time.Time
+	since = since.Truncate(time.Second)
 	for _, repository := range g.Repositories {
 		query := url.Values{"labels": {g.Label}, "state": {"open"}, "sort": {"updated"}, "direction": {"asc"},
-			"since": {since.UTC().Format(time.RFC3339)}, "per_page": {strconv.Itoa(githubPage)}}
+			"since": {since.Add(-time.Second).UTC().Format(time.RFC3339)}, "per_page": {strconv.Itoa(githubPage)}}
 		for page := 1; page <= maxGitHubPages; page++ {
 			query.Set("page", strconv.Itoa(page))
 			var issues []githubIssue
@@ -121,18 +126,36 @@ func (g *GitHubIssues) Assignments(ctx context.Context, since time.Time) ([]Assi
 			}
 			for _, issue := range issues {
 				// GitHub lists pull requests as issues too.
-				if issue.UpdatedAt.After(since) && (len(issue.PullRequest) == 0 || string(issue.PullRequest) == "null") {
-					assignment, err := g.assignment(ctx, repository, issue)
-					if err != nil {
-						return nil, err
-					}
-					found = append(found, assignment)
+				if !issue.UpdatedAt.Before(since) && (len(issue.PullRequest) == 0 || string(issue.PullRequest) == "null") {
+					pending = append(pending, updatedIssue{repository, issue})
 				}
 			}
 			if len(issues) < githubPage {
 				break
 			}
+			if page == maxGitHubPages {
+				// A different repository must not advance the shared cursor
+				// beyond any unread issue, including one in the same second.
+				updated := issues[len(issues)-1].UpdatedAt
+				if cutoff.IsZero() || updated.Before(cutoff) {
+					cutoff = updated
+				}
+			}
 		}
+	}
+	var found []Assignment
+	for _, item := range pending {
+		if !cutoff.IsZero() && !item.issue.UpdatedAt.Before(cutoff) {
+			continue
+		}
+		assignment, err := g.assignment(ctx, item.repository, item.issue)
+		if err != nil {
+			return nil, err
+		}
+		found = append(found, assignment)
+	}
+	if len(found) == 0 && !cutoff.IsZero() {
+		return nil, fmt.Errorf("github: too many updated issues at %s", cutoff)
 	}
 	slices.SortStableFunc(found, func(a, b Assignment) int { return a.UpdatedAt.Compare(b.UpdatedAt) })
 	return found, nil
@@ -152,12 +175,15 @@ func (g *GitHubIssues) assignment(ctx context.Context, repository string, issue 
 			return Assignment{}, err
 		}
 		for _, event := range events {
-			if event.Event == "labeled" && strings.EqualFold(event.Label.Name, g.Label) {
-				assignment.Actor, assignment.GivenAt = event.Actor.Login, event.CreatedAt
+			if event.Event == "labeled" && strings.EqualFold(event.Label.Name, g.Label) && !event.CreatedAt.Before(assignment.GivenAt) {
+				assignment.Actor, assignment.GivenAt = strings.ToLower(event.Actor.Login), event.CreatedAt
 			}
 		}
 		if len(events) < githubPage {
 			break
+		}
+		if page == maxGitHubPages {
+			assignment.Actor, assignment.GivenAt = "", time.Time{}
 		}
 	}
 	return assignment, nil
@@ -248,15 +274,18 @@ func (g *GitHubIssues) Replies(ctx context.Context, since, until time.Time) ([]R
 				return nil, err
 			}
 			for _, comment := range comments {
-				if !comment.CreatedAt.After(since) || (!until.IsZero() && comment.CreatedAt.After(until)) || strings.Contains(comment.Body, githubMark) {
+				if !until.IsZero() && comment.CreatedAt.After(until) {
+					break
+				}
+				if !comment.CreatedAt.After(since) || strings.HasSuffix(strings.TrimSpace(comment.Body), githubMark) {
 					continue
 				}
 				number := comment.IssueURL[strings.LastIndex(comment.IssueURL, "/")+1:]
 				id := repository + "#" + number
 				replies = append(replies, Reply{Key: "github:" + id, ID: strconv.FormatInt(comment.ID, 10), Issue: id,
-					Author: comment.User.Login, Body: comment.Body, CreatedAt: comment.CreatedAt})
+					Author: strings.ToLower(comment.User.Login), Body: comment.Body, CreatedAt: comment.CreatedAt})
 			}
-			if len(comments) < githubPage {
+			if len(comments) < githubPage || (!until.IsZero() && comments[len(comments)-1].CreatedAt.After(until)) {
 				break
 			}
 		}
@@ -292,7 +321,9 @@ type githubStatusError struct {
 	body   string
 }
 
-func (e *githubStatusError) Error() string { return fmt.Sprintf("github: HTTP %d: %s", e.status, e.body) }
+func (e *githubStatusError) Error() string {
+	return fmt.Sprintf("github: HTTP %d: %s", e.status, e.body)
+}
 
 func isGitHubStatus(err error, status int) bool {
 	var failure *githubStatusError
@@ -332,7 +363,7 @@ func (g *GitHubIssues) call(ctx context.Context, repository, method, path string
 	}
 	client := g.Client
 	if client == nil {
-		client = http.DefaultClient
+		client = &http.Client{Timeout: 20 * time.Second}
 	}
 	response, err := client.Do(request)
 	if err != nil {

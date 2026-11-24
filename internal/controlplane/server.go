@@ -12,8 +12,10 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/owainlewis/machinist/internal/config"
@@ -36,19 +38,18 @@ const (
 
 // Server is the one control plane of a deployment. It never starts an agent.
 type Server struct {
-	config   config.Config
-	store    *tickets.Store
-	engine   *engine.Engine
-	client   *ghclient.Client
-	intake   *sources.Intake
-	schedule *sources.Schedule
-	version  string
-	log      io.Writer
-	// linear takes work from Linear, when it is on.
-	linear  *sources.Poller
-	now     func() time.Time
-	presets []presetView
-	factory *factory.Factory
+	config         config.Config
+	store          *tickets.Store
+	engine         *engine.Engine
+	client         *ghclient.Client
+	intake         *sources.Intake
+	schedule       *sources.Schedule
+	version        string
+	log            io.Writer
+	linear, github *sources.Poller
+	now            func() time.Time
+	presets        []presetView
+	factory        *factory.Factory
 	// app is the GitHub App, or nil when there is none.
 	app githubApp
 }
@@ -105,8 +106,17 @@ func New(machinistConfig config.Config, store *tickets.Store, loaded *factory.Fa
 	if err != nil {
 		return nil, err
 	}
+	var issueToken func(context.Context, string) (string, error)
+	if app != nil {
+		issueToken = app.CachedToken
+	}
+	github, err := githubPoller(machinistConfig, loaded, intake, store, log, issueToken)
+	if err != nil {
+		return nil, err
+	}
 	server := &Server{
 		linear:   linear,
+		github:   github,
 		now:      time.Now,
 		config:   machinistConfig,
 		store:    store,
@@ -175,6 +185,47 @@ func linearPoller(ctx context.Context, machinistConfig config.Config, loaded *fa
 		Store:          store,
 		Interval:       linear.Poll,
 		MaxJobsPerHour: linear.MaxJobsPerHour,
+		Log:            log,
+	}, nil
+}
+
+func githubPoller(machinistConfig config.Config, loaded *factory.Factory, intake *sources.Intake, store *tickets.Store, log io.Writer, token func(context.Context, string) (string, error)) (*sources.Poller, error) {
+	github := machinistConfig.GitHub
+	issues := github.Issues
+	if !issues.Enabled() {
+		return nil, nil
+	}
+	preset := issues.Preset
+	if preset == "" {
+		preset = machinistConfig.Server.DefaultPreset
+	}
+	if _, ok := loaded.Preset(preset); !ok {
+		return nil, fmt.Errorf("github.issues.preset %q is not in the factory", preset)
+	}
+	if token == nil {
+		value := strings.TrimSpace(os.Getenv("GH_TOKEN"))
+		if value == "" {
+			return nil, errors.New("github.issues: set GH_TOKEN or configure github.app")
+		}
+		token = func(context.Context, string) (string, error) { return value, nil }
+	}
+	routes := make(map[string]string, len(github.Repositories))
+	repositories := make([]string, 0, len(github.Repositories))
+	for _, name := range github.Repositories {
+		key := strings.ToLower(name)
+		if _, seen := routes[key]; !seen {
+			repositories = append(repositories, key)
+			routes[key] = name
+		}
+	}
+	return &sources.Poller{
+		Tracker:        &sources.GitHubIssues{Repositories: repositories, Label: issues.Label, Token: token},
+		Rules:          sources.TrackerRules{AllowedUsers: issues.AllowedUsers, Preset: preset, Teams: routes},
+		Intake:         intake,
+		Store:          store,
+		Interval:       issues.Poll,
+		MaxJobsPerHour: issues.MaxJobsPerHour,
+		ReportLeftOpen: true,
 		Log:            log,
 	}, nil
 }
@@ -408,13 +459,12 @@ func (s *Server) Serve(ctx context.Context, onListening func(net.Addr)) error {
 	go func() { s.engine.Run(engineContext); close(engineDone) }()
 	scheduleDone := make(chan struct{})
 	go func() { s.schedule.Run(engineContext); close(scheduleDone) }()
-	linearDone := make(chan struct{})
-	go func() {
-		if s.linear != nil {
-			s.linear.Run(engineContext)
+	var pollers sync.WaitGroup
+	for _, poller := range []*sources.Poller{s.linear, s.github} {
+		if poller != nil {
+			pollers.Go(func() { poller.Run(engineContext) })
 		}
-		close(linearDone)
-	}()
+	}
 
 	select {
 	case err = <-served:
@@ -426,7 +476,7 @@ func (s *Server) Serve(ctx context.Context, onListening func(net.Addr)) error {
 	stopEngine()
 	<-engineDone
 	<-scheduleDone
-	<-linearDone
+	pollers.Wait()
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}

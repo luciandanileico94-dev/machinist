@@ -86,6 +86,32 @@ github:
 	}
 }
 
+func TestGitHubIssuesConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	writeTestFile(t, path, `github:
+  repositories: [owner/repo]
+  issues:
+    label: fabrika
+    allowed_users: [" Maintainer "]
+`)
+	loaded, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issues := loaded.GitHub.Issues
+	if !issues.Enabled() || issues.Poll != time.Minute || issues.MaxJobsPerHour != 20 || strings.Join(issues.AllowedUsers, ",") != "maintainer" {
+		t.Fatalf("issues = %+v", issues)
+	}
+	writeTestFile(t, path, `github:
+  repositories: [owner/repo]
+  issues:
+    label: fabrika
+`)
+	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), "allowed_users") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestLoadConfigNamesOldKeys(t *testing.T) {
 	for _, test := range []struct{ body, key string }{
 		{"server:\n  state: factory\n", "state on line 2"},
