@@ -23,6 +23,8 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
   let releaseOld, releaseRun, holdRun = false;
   let reruns = 0;
   let factorySaves = 0;
+  ticket.fabrika_stage = "review";
+  ticket.fabrika_fallbacks = ["review-code: Luna → DeepSeek"];
   const factorySettings = {
     router: { strategy: "weighted-round-robin", subscriptions: { claude2: { weight: 1 } } },
     stages: { build: { provider: "claude", model: "claude-opus-5-5", effort: "high", fallback: ["claude/claude-sonnet-5-5:medium"] }, "review-lead": { provider: "deepseek", model: "deepseek-v4.1-flash-max", effort: "max", fallback: [] } },
@@ -30,10 +32,6 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
     rules: { primaryStop: 0.9, subscriptions: { tretya: { label: "Третья", enabled: true, order: 1, weeklyMax: 0.8, topUpHours: 5, topUpTo: 1, max5h: 0.95 }, chetvertaya: { label: "Четвёртая", enabled: true, order: 2, weeklyMax: 0.7, topUpHours: 17, topUpTo: 1, max5h: 0.95, temporary: true, note: "Временно" }, vtoraya: { label: "Вторая", enabled: true, order: 3, weeklyMax: 0.85, topUpHours: 24, topUpTo: 1, max5h: 0.95 }, osnovnaya: { label: "Основная", enabled: true, order: 4, weeklyMax: 0.9, topUpHours: 0, topUpTo: 0.9, max5h: 0.95 } } },
     subscriptionStatus: ["Codex", "Основная", "Вторая", "Третья", "Четвёртая"].map((name, index) => ({ id: String(index), name, status: "good", statusLabel: "Годна", "5hUtilization": 0.2, "5hReset": 1795557000, "7dUtilization": 0.4, "7dReset": 1796025600, "5hThreshold": 0.95, "7dThreshold": 0.8, requests: index + 2 })),
   };
-  const factoryJobs = { jobs: [
-    { id: "f_1", key: "ENG-1", title: "Review the change", state: "running", current_step: "review-ui", preset: "default", source: "linear", source_url: "https://linear.app/team/ENG-1", vars: { repo: "owner/repo" } },
-    { id: "f_2", key: "ENG-2", title: "Merged change", state: "done", current_step: "", pr_state: "merged", preset: "default", vars: { repo: "owner/repo" }, pr_number: 22 },
-  ] };
   const started = [];
   const reply = (status, body) => ({ ok: status < 400, status, json: async () => body });
   globalThis.fetch = async (url, options = {}) => {
@@ -45,7 +43,6 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
     }
     if (!signedIn) return reply(401, { error: "a token is required" });
     if (url === "/api/v1/repositories") return reply(200, { repositories: ["owner/repo"], name: "alice" });
-    if (url === "/machinist/jobs") return reply(200, factoryJobs);
     if (url === "/api/v1/fabrika/settings" && options.method === "PUT") {
       factorySaves++;
       Object.assign(factorySettings, JSON.parse(options.body));
@@ -109,12 +106,14 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
   await act(async () => [...document.querySelectorAll(".range button")].find(button => button.textContent === "List").click());
   await eventually(() => assert.ok(document.querySelector("table.jobs tbody tr")));
   assert.equal(localStorage.getItem("machinist-jobs-view"), "list");
-  assert.deepEqual([...document.querySelectorAll(".job-title")].map(cell => cell.textContent), ["Center the toasts", "An older job"]);
+  assert.deepEqual([...document.querySelectorAll(".job-title a")].map(cell => cell.textContent), ["Center the toasts", "An older job"]);
   assert.equal(document.querySelector('nav a[aria-current="page"]').textContent, "Jobs");
 
   await act(async () => document.querySelector('a[href="#/jobs/t_new"]').click());
   await eventually(() => assert.equal(document.querySelector("h1").textContent, "Center the toasts"));
   assert.match(document.querySelector(".job-head .pill").textContent, /Done/);
+  assert.match(document.querySelector(".job-facts").textContent, /Этап фабрикиРевью/);
+  assert.match(document.querySelector('[aria-labelledby="fabrika-fallbacks"]').textContent, /review-code: Luna → DeepSeek/);
   assert.ok(document.querySelector('a[href="https://github.com/owner/repo/pull/44"]'));
   await eventually(() => assert.match(document.querySelector(".step-output")?.textContent || "", /FAIL tests\/styles.test.ts/));
   assert.deepEqual([...document.querySelectorAll(".step-name")].map(name => name.textContent), ["checkout", "test", "publish"]);
@@ -196,10 +195,8 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
 
   await act(async () => { window.location.hash = "#/factory"; });
   await eventually(() => assert.equal(document.querySelector("h1").textContent, "Фабрика"));
-  await eventually(() => assert.equal(document.querySelectorAll(".factory-card").length, 2));
-  assert.equal(document.querySelector('[aria-label="Ревью"] .factory-card-title').textContent, "Review the change");
-  assert.equal(document.querySelector('[aria-label="Влито"] .factory-card-title').textContent, "Merged change");
-  await act(async () => [...document.querySelectorAll(".factory-tabs button")].find(button => button.textContent === "Настройки").click());
+  assert.equal(document.querySelector(".factory-tabs"), null);
+  assert.equal(document.querySelector(".factory-board"), null);
   await eventually(() => assert.ok(document.querySelector('[aria-label="Build — модель"]')));
   assert.equal(document.querySelectorAll(".factory-subscription").length, 5);
   assert.equal(document.querySelectorAll('[role="progressbar"]').length, 10);
@@ -219,7 +216,7 @@ test("sign in, find a job, then read what its steps printed", { timeout: 30000 }
   assert.deepEqual([...document.querySelectorAll(".factory-fallback select[aria-label$=модель]")].map(select => select.value), ["claude-sonnet-5-5", "claude-opus-5-5"]);
   assert.equal(document.querySelector('[aria-label="Стоп основной, неделя"]').value, "90");
   await act(async () => [...document.querySelectorAll(".page-actions button")].find(button => button.textContent === "Сохранить настройки").click());
-  await eventually(() => assert.equal(document.querySelector('[role="status"]').textContent, "Сохранено в etapy.yaml и правилах роутера."));
+  await eventually(() => assert.equal(document.querySelector('[role="status"]').textContent, "Сохранено в etapy.yaml и правилах выбора."));
   assert.equal(factorySaves, 1);
 
   signedIn = false;

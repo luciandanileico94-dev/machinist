@@ -4,7 +4,7 @@ import { api, SignedOutError } from "./api.js";
 import { AgentBadges } from "./agent-badge.jsx";
 import { harnessList, waitingForRunner } from "./agents.js";
 import { State, relativeTime, useNow } from "./display.jsx";
-import { failureReason, formatDuration, isFinished, jobState, linkParts, noPullRequest, prLink, prState, sourceLink, sourceLinkText } from "./jobs.js";
+import { fabrikaPhase, failureReason, formatDuration, isFinished, jobState, linkParts, noPullRequest, prLink, prState, sourceLink, sourceLinkText } from "./jobs.js";
 import { Source } from "./source-mark.jsx";
 import { latestAction, noStepsNote, pipeline, pollEvents, runSpend, spend, spendTitle, stepTime, steps } from "./step-log.js";
 import { Button } from "@/components/ui/button";
@@ -224,6 +224,8 @@ export function JobView({ detail, onChange }) {
   const state = jobState(ticket, runs.some(run => run.status === "running"));
   const pr = prLink(ticket);
   const original = sourceLink(ticket);
+  const phase = fabrikaPhase(ticket);
+  const fallbacks = ticket.fabrika_fallbacks || [];
   const prompt = entries.find(entry => entry.kind === "request")?.body || "";
   const result = [...runs].reverse().find(run => run.report?.summary)?.report.summary || "";
   const failure = state === "failed" ? failureReason(entries) : "";
@@ -241,10 +243,15 @@ export function JobView({ detail, onChange }) {
       <div><dt>Source</dt><dd className="job-source"><Source source={ticket.source} />{original && <a href={original} target="_blank" rel="noreferrer">{sourceLinkText(original)}<ArrowUpRight className="size-3.5" aria-hidden="true" /></a>}</dd></div>
       <div><dt>Repository</dt><dd>{ticket.repo}</dd></div>
       <div><dt>Preset</dt><dd>{ticket.agent}</dd></div>
+      {phase && <div><dt>Этап фабрики</dt><dd>{phase}</dd></div>}
       <div><dt>Pull request</dt><dd>{pr ? <PullRequest ticket={ticket} link={pr} /> : noPullRequest(state)}</dd></div>
       <div><dt>Started by</dt><dd>{ticket.created_by}</dd></div>
       <div><dt>Created</dt><dd><time dateTime={ticket.created_at}>{relativeTime(ticket.created_at)}</time></dd></div>
     </dl>
+    {fallbacks.length > 0 && <section className="panel" aria-labelledby="fabrika-fallbacks">
+      <h2 className="label" id="fabrika-fallbacks">Переходы на запасную модель</h2>
+      <ul>{fallbacks.map((line, index) => <li key={index}>{line}</li>)}</ul>
+    </section>}
     {waitingFor.length > 0 && <p className="page-warning" role="status">No online runner has {harnessList(waitingFor)}, which this job's agents run, so it cannot start. Install {waitingFor.length === 1 ? "it" : "them"} on a runner and restart the runner.</p>}
     {failure && <section className="panel job-failure" aria-labelledby="job-failure">
       <h2 id="job-failure" className="label"><CircleAlert className="size-3.5" aria-hidden="true" />Why it failed</h2>

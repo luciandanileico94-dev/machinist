@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -65,14 +66,16 @@ type GitHubApp struct {
 	PrivateKeyFile string `yaml:"private_key_file"`
 }
 
-// GitHubIssues starts jobs from issues with Label in github.repositories.
+// GitHubIssues starts jobs from issues with Label in the selected connected repositories.
 type GitHubIssues struct {
-	Label          string        `yaml:"label"`
-	AllowedUsers   []string      `yaml:"allowed_users"`
-	Preset         string        `yaml:"preset"`
-	PollInterval   string        `yaml:"poll_interval"`
-	Poll           time.Duration `yaml:"-"`
-	MaxJobsPerHour int           `yaml:"max_jobs_per_hour"`
+	Label             string            `yaml:"label"`
+	Repositories      []string          `yaml:"repositories"`
+	AllowedUsers      []string          `yaml:"allowed_users"`
+	Preset            string            `yaml:"preset"`
+	RepositoryPresets map[string]string `yaml:"repository_presets"`
+	PollInterval      string            `yaml:"poll_interval"`
+	Poll              time.Duration     `yaml:"-"`
+	MaxJobsPerHour    int               `yaml:"max_jobs_per_hour"`
 }
 
 func (g GitHubIssues) Enabled() bool { return g.Label != "" }
@@ -80,13 +83,18 @@ func (g GitHubIssues) Enabled() bool { return g.Label != "" }
 func (g *GitHubIssues) applyDefaults(repositories []string) error {
 	g.Label = strings.TrimSpace(g.Label)
 	if !g.Enabled() {
-		if len(g.AllowedUsers) > 0 || g.Preset != "" || g.PollInterval != "" || g.MaxJobsPerHour != 0 {
+		if len(g.Repositories) > 0 || len(g.RepositoryPresets) > 0 || len(g.AllowedUsers) > 0 || g.Preset != "" || g.PollInterval != "" || g.MaxJobsPerHour != 0 {
 			return errors.New("github.issues: label is required")
 		}
 		return nil
 	}
 	if len(repositories) == 0 {
 		return errors.New("github.issues: list repositories in github.repositories")
+	}
+	for _, name := range g.Repositories {
+		if !slices.ContainsFunc(repositories, func(repo string) bool { return strings.EqualFold(name, repo) }) {
+			return fmt.Errorf("github.issues.repositories: %q is not in github.repositories", name)
+		}
 	}
 	var allowed []string
 	for _, user := range g.AllowedUsers {
