@@ -101,7 +101,7 @@ function Settings({ config, setConfig, onSave, saving, message }) {
           <small>{item[`${window}Reset`] ? `Сброс ${new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Chisinau", dateStyle: window === "5h" ? undefined : "medium", timeStyle: "short" }).format(new Date(item[`${window}Reset`] * 1000))}` : "Время сброса неизвестно"}</small>
         </div>)}
         <p className="ticket-meta">Запросы фабрики: {item.requests ?? 0}</p>
-        {item.updatedAt && <p className="ticket-meta">Данные Codex на {new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Chisinau", hour: "2-digit", minute: "2-digit" }).format(new Date(item.updatedAt))}</p>}
+        {item.updatedAt && <p className="ticket-meta">Данные кэша на {new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Chisinau", hour: "2-digit", minute: "2-digit" }).format(new Date(item.updatedAt))}</p>}
       </article>)}</div>
     </section>
     <section className="panel factory-section" aria-labelledby="subscription-rules-heading">
