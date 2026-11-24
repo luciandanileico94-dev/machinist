@@ -41,3 +41,14 @@ func TestProxyFabrikaSettings(t *testing.T) {
 		})
 	}
 }
+
+func TestFabrikaSettingsURL(t *testing.T) {
+	t.Setenv("FABRIKA_SETTINGS_URL", "http://127.0.0.1:8421/api/settings")
+	if got := fabrikaSettingsURL(); got != "http://127.0.0.1:8421/api/settings" {
+		t.Fatalf("fabrikaSettingsURL() = %q", got)
+	}
+	t.Setenv("FABRIKA_SETTINGS_URL", "")
+	if got := fabrikaSettingsURL(); got != "http://127.0.0.1:8420/api/settings" {
+		t.Fatalf("default fabrikaSettingsURL() = %q", got)
+	}
+}

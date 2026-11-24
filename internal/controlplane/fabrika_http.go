@@ -4,11 +4,19 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"os"
 	"time"
 )
 
 func (s *Server) fabrikaSettings(w http.ResponseWriter, r *http.Request, _ string) {
-	proxyFabrikaSettings(w, r, "http://127.0.0.1:8420/api/settings")
+	proxyFabrikaSettings(w, r, fabrikaSettingsURL())
+}
+
+func fabrikaSettingsURL() string {
+	if target := os.Getenv("FABRIKA_SETTINGS_URL"); target != "" {
+		return target
+	}
+	return "http://127.0.0.1:8420/api/settings"
 }
 
 func proxyFabrikaSettings(w http.ResponseWriter, r *http.Request, target string) {
